@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "build:electron": "node scripts/build-electron.js",
+    "build:all": "npm run build && npm run build:electron",
     "electron:dev": "set ELECTRON=true&& vite",
-    "electron:build": "npm run build && electron-builder",
+    "electron:build": "npm run build:all && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -38,6 +40,7 @@
     "concurrently": "^8.2.2",
     "electron": "^34.5.8",
     "electron-builder": "^24.9.1",
+    "esbuild": "^0.27.3",
     "typescript": "^5.3.3",
     "unplugin-auto-import": "^0.17.5",
     "unplugin-vue-components": "^0.26.0",
@@ -56,12 +59,6 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "build/tray.png",
-        "to": "tray.png"
-      }
     ],
     "win": {
       "target": "nsis",

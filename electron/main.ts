@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { join, dirname } from 'path'
 import { writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import {
@@ -44,9 +43,6 @@ import {
   type DesignDoc,
   type DesignDocProgress
 } from './store'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
 
 // 是否是开发模式
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
