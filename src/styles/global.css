@@ -1,0 +1,134 @@
+/* ── 全局重置与变量 ─────────────────────────────────────── */
+:root {
+  --primary: #165DFF;
+  --primary-light: #4080FF;
+  --primary-lighter: #EBF0FF;
+  --primary-dark: #0E42D2;
+  --success: #00B42A;
+  --warning: #FF7D00;
+  --danger: #F53F3F;
+  --text-primary: #1D2129;
+  --text-secondary: #4E5969;
+  --text-tertiary: #86909C;
+  --border: #E5E6EB;
+  --bg: #F2F3F5;
+  --bg-white: #FFFFFF;
+  --sidebar-width: 220px;
+  --header-height: 52px;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 滚动条美化 ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #C9CDD4;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A9AEB8;
+}
+
+/* ── Element Plus 覆盖 ─────────────────────────────────── */
+.el-button--primary {
+  --el-button-bg-color: var(--primary);
+  --el-button-border-color: var(--primary);
+  --el-button-hover-bg-color: var(--primary-light);
+  --el-button-hover-border-color: var(--primary-light);
+  --el-button-active-bg-color: var(--primary-dark);
+}
+
+.el-card {
+  --el-card-border-radius: var(--radius-md);
+  --el-card-border-color: var(--border);
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ── Markdown 渲染样式 ─────────────────────────────────── */
+.markdown-body {
+  line-height: 1.8;
+  color: var(--text-primary);
+  user-select: text;
+}
+.markdown-body h1 { font-size: 22px; font-weight: 700; margin: 24px 0 12px; color: var(--text-primary); border-bottom: 2px solid var(--primary-lighter); padding-bottom: 8px; }
+.markdown-body h2 { font-size: 18px; font-weight: 600; margin: 20px 0 10px; color: var(--text-primary); }
+.markdown-body h3 { font-size: 16px; font-weight: 600; margin: 16px 0 8px; color: var(--text-secondary); }
+.markdown-body p { margin: 8px 0; }
+.markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 8px 0; }
+.markdown-body li { margin: 4px 0; }
+.markdown-body blockquote { border-left: 4px solid var(--primary); padding: 8px 16px; background: var(--primary-lighter); margin: 12px 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--text-secondary); }
+.markdown-body code { background: #F2F3F5; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; color: #E6162D; }
+.markdown-body pre { background: #1E2337; border-radius: var(--radius-md); padding: 16px; overflow-x: auto; margin: 12px 0; }
+.markdown-body pre code { background: none; color: #ABB2BF; padding: 0; font-size: 13px; }
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+.markdown-body th { background: var(--primary-lighter); color: var(--primary); font-weight: 600; padding: 10px 12px; text-align: left; border: 1px solid var(--border); }
+.markdown-body td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+.markdown-body tr:hover td { background: #FAFAFA; }
+.markdown-body strong { color: var(--text-primary); font-weight: 600; }
+.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.markdown-body a { color: var(--primary); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+
+/* ── 搜索高亮 ─────────────────────────────────────────── */
+.search-highlight {
+  background: #FFE58F;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── 动画 ─────────────────────────────────────────────── */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.slide-up-enter-active { transition: all 0.3s ease; }
+.slide-up-enter-from { transform: translateY(10px); opacity: 0; }
+
+/* ── 加载动画 ─────────────────────────────────────────── */
+.ai-loading-dots span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin: 0 3px;
+  animation: dot-bounce 1.4s infinite ease-in-out;
+}
+.ai-loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.ai-loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}

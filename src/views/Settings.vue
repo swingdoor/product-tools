@@ -1,0 +1,513 @@
+<template>
+  <div class="settings-page">
+    <el-scrollbar>
+      <div class="settings-inner">
+        
+        <!-- 选项卡切换 -->
+        <el-tabs v-model="activeTab" class="settings-tabs">
+          <el-tab-pane label="API 配置" name="api">
+            <el-card shadow="never" class="settings-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon color="#165DFF"><Setting /></el-icon>
+                  <span>AI 接口配置</span>
+                  <el-tag v-if="settingsStore.isConfigured" type="success" size="small">已配置</el-tag>
+                  <el-tag v-else type="warning" size="small">未配置</el-tag>
+                </div>
+              </template>
+
+              <el-form :model="form" label-position="top" class="settings-form">
+                <el-form-item label="API Key" required>
+                  <el-input
+                    v-model="form.apiKey"
+                    type="password"
+                    show-password
+                    placeholder="sk-..."
+                    clearable
+                  />
+                  <div class="field-hint">您的 AI 服务 API Key，安全存储在本地</div>
+                </el-form-item>
+
+                <el-form-item label="接口地址 (Base URL)" required>
+                  <el-input
+                    v-model="form.baseUrl"
+                    placeholder="https://api.deepseek.com/v1"
+                    clearable
+                  />
+                  <div class="field-hint">OpenAI 兼容接口地址，支持 DeepSeek、OpenAI、Moonshot 等</div>
+                </el-form-item>
+
+                <el-form-item label="模型">
+                  <el-select v-model="form.model" filterable allow-create style="width:100%">
+                    <el-option-group label="DeepSeek">
+                      <el-option label="deepseek-reasoner (R1, 推荐)" value="deepseek-reasoner" />
+                      <el-option label="deepseek-chat (V3)" value="deepseek-chat" />
+                    </el-option-group>
+                    <el-option-group label="OpenAI">
+                      <el-option label="gpt-4o" value="gpt-4o" />
+                      <el-option label="gpt-4-turbo" value="gpt-4-turbo" />
+                      <el-option label="o3-mini" value="o3-mini" />
+                    </el-option-group>
+                    <el-option-group label="其他">
+                      <el-option label="moonshot-v1-128k" value="moonshot-v1-128k" />
+                      <el-option label="claude-3-5-sonnet-20241022" value="claude-3-5-sonnet-20241022" />
+                    </el-option-group>
+                  </el-select>
+                  <div class="field-hint">支持所有 OpenAI 兼容模型，也可手动输入自定义模型名</div>
+                </el-form-item>
+
+                <div class="form-actions">
+                  <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
+                    <el-icon><Check /></el-icon> 保存配置
+                  </el-button>
+                  <el-button size="large" @click="testConnection" :loading="testing">
+                    <el-icon><Connection /></el-icon> 测试连接
+                  </el-button>
+                </div>
+              </el-form>
+
+              <!-- 测试结果 -->
+              <el-alert
+                v-if="testResult"
+                :title="testResult.message"
+                :type="testResult.success ? 'success' : 'error'"
+                :closable="false"
+                show-icon
+                style="margin-top:16px"
+              />
+            </el-card>
+
+            <!-- 快捷模板 -->
+            <el-card shadow="never" class="settings-card" style="margin-top:20px">
+              <template #header>
+                <div class="card-header">
+                  <el-icon color="#86909C"><Star /></el-icon>
+                  <span>快捷配置模板</span>
+                </div>
+              </template>
+              <div class="templates">
+                <div
+                  v-for="tpl in templates"
+                  :key="tpl.name"
+                  class="template-item"
+                  @click="applyTemplate(tpl)"
+                >
+                  <div class="template-icon" :style="{ background: tpl.color + '20', color: tpl.color }">
+                    {{ tpl.icon }}
+                  </div>
+                  <div class="template-info">
+                    <p class="template-name">{{ tpl.name }}</p>
+                    <p class="template-url">{{ tpl.baseUrl }}</p>
+                  </div>
+                  <el-button size="small" type="primary" plain>使用</el-button>
+                </div>
+              </div>
+            </el-card>
+          </el-tab-pane>
+
+          <el-tab-pane label="提示词配置" name="prompts">
+            <el-card shadow="never" class="settings-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon color="#FF7D00"><ChatLineSquare /></el-icon>
+                  <span>系统提示词 (System Prompts)</span>
+                  <el-button type="primary" link @click="resetPrompts">
+                    <el-icon><Refresh /></el-icon> 恢复默认
+                  </el-button>
+                </div>
+              </template>
+              
+              <div class="prompts-list">
+                <div class="prompt-item" v-for="(label, key) in promptLabels" :key="key">
+                  <div class="prompt-header">
+                    <span class="prompt-title">{{ label }}</span>
+                    <span class="prompt-key">{{ key }}</span>
+                  </div>
+                  <el-input
+                    v-model="form.prompts[key]"
+                    type="textarea"
+                    :rows="4"
+                    placeholder="输入系统提示词..."
+                  />
+                </div>
+              </div>
+
+              <div class="form-actions" style="margin-top:20px">
+                <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
+                  <el-icon><Check /></el-icon> 保存提示词
+                </el-button>
+              </div>
+            </el-card>
+          </el-tab-pane>
+
+          <el-tab-pane label="数据管理" name="data">
+            <el-card shadow="never" class="settings-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon color="#F53F3F"><DeleteFilled /></el-icon>
+                  <span>数据管理</span>
+                </div>
+              </template>
+              <div class="data-actions">
+                <div class="data-item">
+                  <div class="data-info">
+                    <p class="data-title">清除市场洞察历史</p>
+                    <p class="data-desc">删除所有历史生成的市场洞察报告（当前 {{ marketStore.reports.length }} 条）</p>
+                  </div>
+                  <el-button type="danger" plain size="small" @click="handleClearMarket">清除</el-button>
+                </div>
+                <el-divider />
+                <div class="data-item">
+                  <div class="data-info">
+                    <p class="data-title">清除需求分析历史</p>
+                    <p class="data-desc">删除所有保存的需求分析任务（当前 {{ analysisStore.tasks.length }} 条）</p>
+                  </div>
+                  <el-button type="danger" plain size="small" @click="handleClearAnalysis">清除</el-button>
+                </div>
+                <el-divider />
+                <div class="data-item">
+                  <div class="data-info">
+                    <p class="data-title">清除产品原型历史</p>
+                    <p class="data-desc">删除所有保存的产品原型项目（当前 {{ prototypeStore.projects.length }} 条）</p>
+                  </div>
+                  <el-button type="danger" plain size="small" @click="handleClearPrototype">清除</el-button>
+                </div>
+                <el-divider />
+                <div class="data-item">
+                  <div class="data-info">
+                    <p class="data-title">清除设计文档历史</p>
+                    <p class="data-desc">删除所有生成的设计文档（当前 {{ designDocStore.docs.length }} 条）</p>
+                  </div>
+                  <el-button type="danger" plain size="small" @click="handleClearDesign">清除</el-button>
+                </div>
+              </div>
+            </el-card>
+          </el-tab-pane>
+        </el-tabs>
+
+      </div>
+    </el-scrollbar>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useSettingsStore } from '@/stores/settings'
+import { useMarketInsightStore } from '@/stores/marketInsight'
+import { useProductAnalysisStore } from '@/stores/productAnalysis'
+import { useProductPrototypeStore } from '@/stores/productPrototype'
+import { useDesignDocStore } from '@/stores/designDoc'
+
+const settingsStore = useSettingsStore()
+const marketStore = useMarketInsightStore()
+const analysisStore = useProductAnalysisStore()
+const prototypeStore = useProductPrototypeStore()
+const designDocStore = useDesignDocStore()
+
+const activeTab = ref('api')
+const form = reactive({ ...settingsStore.settings })
+const saving = ref(false)
+const testing = ref(false)
+const testResult = ref<{ success: boolean; message: string } | null>(null)
+
+const promptLabels: Record<string, string> = {
+  'market-insight': '市场洞察 (Market Insight)',
+  'product-analysis': '需求分析 (Product Analysis)',
+  'product-prototype': '产品原型数据 (Product Prototype)',
+  'prototype-plan': '原型页面规划 (Prototype Plan)',
+  'prototype-page': '单页原型设计 (Prototype Page)',
+  'design-doc': '设计文档 (Design Document)'
+}
+
+const templates = [
+  { name: 'DeepSeek (推荐)', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-reasoner', icon: '🔮', color: '#165DFF' },
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', icon: '🤖', color: '#10A37F' },
+  { name: 'Moonshot (月之暗面)', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-128k', icon: '🌙', color: '#722ED1' },
+  { name: 'OpenAI 兼容代理', baseUrl: 'https://your-proxy.com/v1', model: 'deepseek-chat', icon: '🔄', color: '#FF7D00' }
+]
+
+function applyTemplate(tpl: typeof templates[0]) {
+  form.baseUrl = tpl.baseUrl
+  form.model = tpl.model
+  ElMessage.success(`已应用 ${tpl.name} 模板，请填写 API Key 后保存`)
+}
+
+function saveSettings() {
+  if (!form.apiKey.trim()) {
+    ElMessage.warning('请填写 API Key')
+    return
+  }
+  if (!form.baseUrl.trim()) {
+    ElMessage.warning('请填写接口地址')
+    return
+  }
+  saving.value = true
+  setTimeout(() => {
+    settingsStore.save({ ...form })
+    saving.value = false
+    testResult.value = null
+    ElMessage.success('配置已保存')
+  }, 300)
+}
+
+async function testConnection() {
+  if (!form.apiKey.trim() || !form.baseUrl.trim()) {
+    ElMessage.warning('请先填写 API Key 和接口地址')
+    return
+  }
+  testing.value = true
+  testResult.value = null
+  try {
+    const response = await fetch(`${form.baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${form.apiKey}` }
+    })
+    if (response.ok) {
+      testResult.value = { success: true, message: '连接成功！接口配置正确。' }
+    } else {
+      testResult.value = { success: false, message: `连接失败：HTTP ${response.status} - ${response.statusText}` }
+    }
+  } catch (err) {
+    testResult.value = { success: false, message: `连接失败：${err instanceof Error ? err.message : '网络错误'}` }
+  } finally {
+    testing.value = false
+  }
+}
+
+function clearMarketHistory() {
+  localStorage.removeItem('pt_market_reports')
+  marketStore.reports.splice(0)
+  ElMessage.success('市场洞察历史已清除')
+}
+
+async function clearAnalysisDrafts() {
+  // 清除数据库中的分析任务
+  localStorage.removeItem('pt_analysis_tasks')
+  await analysisStore.loadTasks() // 先加载数据
+  const taskIds = analysisStore.tasks.map(t => t.id)
+  for (const id of taskIds) {
+    await analysisStore.deleteTask(id)
+  }
+  ElMessage.success('需求分析历史已清除')
+}
+
+function clearPrototypeHistory() {
+  localStorage.removeItem('pt_prototypes')
+  prototypeStore.projects.splice(0)
+  ElMessage.success('产品原型历史已清除')
+}
+
+// 数据清除处理函数
+async function handleClearMarket() {
+  try {
+    await ElMessageBox.confirm('确定要清除所有市场洞察报告吗？\n\n此操作不可恢复！', '警告', {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const result = await window.electronAPI.dataClearMarket()
+    if (result.success) {
+      await marketStore.loadReports()
+      ElMessage.success('市场洞察历史已清除')
+    } else {
+      ElMessage.error(result.error || '清除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+async function handleClearAnalysis() {
+  try {
+    await ElMessageBox.confirm('确定要清除所有需求分析任务吗？\n\n此操作不可恢复！', '警告', {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const result = await window.electronAPI.dataClearAnalysis()
+    if (result.success) {
+      await analysisStore.loadTasks()
+      ElMessage.success('需求分析历史已清除')
+    } else {
+      ElMessage.error(result.error || '清除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+async function handleClearPrototype() {
+  try {
+    await ElMessageBox.confirm('确定要清除所有产品原型项目吗？\n\n此操作不可恢复！', '警告', {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const result = await window.electronAPI.dataClearPrototype()
+    if (result.success) {
+      await prototypeStore.loadProjectsFromDB()
+      ElMessage.success('产品原型历史已清除')
+    } else {
+      ElMessage.error(result.error || '清除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+async function handleClearDesign() {
+  try {
+    await ElMessageBox.confirm('确定要清除所有设计文档吗？\n\n此操作不可恢复！', '警告', {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    const result = await window.electronAPI.dataClearDesign()
+    if (result.success) {
+      await designDocStore.loadDocs()
+      ElMessage.success('设计文档历史已清除')
+    } else {
+      ElMessage.error(result.error || '清除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+function resetPrompts() {
+  settingsStore.resetPrompts()
+  form.prompts = { ...settingsStore.settings.prompts }
+  ElMessage.success('提示词已恢复默认')
+}
+</script>
+
+<style scoped>
+.settings-page {
+  height: 100%;
+  background: var(--bg);
+}
+
+.settings-inner {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: var(--border);
+}
+
+.settings-tabs :deep(.el-tabs__content) {
+  padding-top: 20px;
+  overflow: visible;
+}
+
+.settings-card { flex-shrink: 0; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-form { max-width: 540px; }
+
+/* 提示词列表 */
+.prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.prompt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prompt-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.prompt-key {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-tertiary);
+  background: var(--bg-gray);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+/* 模板 */
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.template-item:hover { border-color: var(--primary); background: var(--primary-lighter); }
+
+.template-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.template-info { flex: 1; }
+.template-name { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.template-url { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; font-family: monospace; }
+
+/* 数据管理 */
+.data-actions { display: flex; flex-direction: column; }
+
+.data-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.data-info { flex: 1; }
+.data-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.data-desc { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+</style>
