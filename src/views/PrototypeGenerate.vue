@@ -112,6 +112,38 @@
           <el-button v-if="isGenerating" plain @click="cancelGenerate" class="cancel-btn">
             取消生成
           </el-button>
+
+          <!-- 任务日志 (合并到卡片中) -->
+          <div class="card-logs">
+            <div class="card-logs-header">
+              <span class="log-title">
+                <el-icon><Document /></el-icon>
+                任务日志
+              </span>
+            </div>
+            <div class="card-logs-content">
+              <el-scrollbar max-height="240px">
+                <div v-if="taskLogs.length === 0" class="log-empty">
+                  <template v-if="currentProject?.status === 'generating'">
+                    <el-icon class="rotating" color="#165DFF"><Loading /></el-icon>
+                    <span>任务正在后台生成中...</span>
+                  </template>
+                  <template v-else>
+                    暂无日志
+                  </template>
+                </div>
+                <div v-else class="log-list">
+                  <div v-for="log in taskLogs" :key="log.id" class="log-item">
+                    <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
+                    <el-tag :type="getLogTagType(log.type)" size="small" effect="light">
+                      {{ getLogLabel(log.type) }}
+                    </el-tag>
+                    <span class="log-message">{{ log.message }}</span>
+                  </div>
+                </div>
+              </el-scrollbar>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -130,50 +162,24 @@
         </div>
       </div>
 
-      <!-- 无效状态 - 已完成任务不应进入此页面 -->
-      <div v-else class="invalid-state">
+      <!-- 状态4：无效/已完成状态 - 如果不是正在生成且没有动作，则展示跳转按钮 -->
+      <div v-else-if="!isGenerating && !route.query.action" class="invalid-state">
         <el-empty description="该任务已完成，请前往查看页">
           <el-button type="primary" @click="goToViewPage">进入查看页</el-button>
         </el-empty>
       </div>
-    </main>
 
-    <!-- 日志面板 -->
-    <aside class="log-panel" :class="{ collapsed: !showLogs }">
-      <div class="log-header">
-        <span class="log-title">
-          <el-icon><Document /></el-icon>
-          任务日志
-        </span>
-        <el-button text size="small" @click="showLogs = !showLogs">
-          {{ showLogs ? '收起' : '展开' }}
-        </el-button>
+      <!-- 备用状态：如果是正在生成或者有生成动作，但当前状态不是 pending/failed/generating，
+           这种情况下显示生成中状态的占位，防止闪烁 -->
+      <div v-else class="generating-state">
+         <div class="state-card">
+           <div class="card-icon">
+             <el-icon class="rotating" size="64" color="#165DFF"><Loading /></el-icon>
+           </div>
+           <p>正在初始化生成环境...</p>
+         </div>
       </div>
-      <transition name="slide">
-        <div v-show="showLogs" class="log-content">
-          <el-scrollbar max-height="300px">
-            <div v-if="taskLogs.length === 0" class="log-empty">
-              <template v-if="currentProject?.status === 'generating'">
-                <el-icon class="rotating" color="#165DFF"><Loading /></el-icon>
-                <span>任务正在后台生成中，请耐心等待完成...</span>
-              </template>
-              <template v-else>
-                暂无日志
-              </template>
-            </div>
-            <div v-else class="log-list">
-              <div v-for="log in taskLogs" :key="log.id" class="log-item">
-                <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
-                <el-tag :type="getLogTagType(log.type)" size="small" effect="light">
-                  {{ getLogLabel(log.type) }}
-                </el-tag>
-                <span class="log-message">{{ log.message }}</span>
-              </div>
-            </div>
-          </el-scrollbar>
-        </div>
-      </transition>
-    </aside>
+    </main>
   </div>
 </template>
 
@@ -190,10 +196,10 @@ const prototypeStore = useProductPrototypeStore()
 const settingsStore = useSettingsStore()
 
 // 当前项目
-const currentProject = computed(() => prototypeStore.currentProject)
+const currentProject = computed(() => prototypeStore.currentTask)
 
 // 任务日志
-const taskLogs = computed(() => prototypeStore.taskLogs)
+const taskLogs = computed(() => prototypeStore.currentTaskLogs)
 const showLogs = ref(true)
 
 // 生成状态 - 从数据库读取
@@ -209,7 +215,7 @@ const errorMessage = computed(() => currentProject.value?.progress?.errorMessage
 const POLL_INTERVAL_MS = 2 * 1000
 
 // 轮询定时器
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 // 进度计算
 const genProgress = computed(() => {
@@ -284,7 +290,7 @@ function getStatusType(): 'primary' | 'success' | 'warning' | 'danger' | 'info' 
 
 function getStatusText(): string {
   const status = currentProject.value?.status
-  const map = { pending: '未提交', generating: '生成中', completed: '已完成', failed: '失败' }
+  const map = { pending: '待提交', generating: '执行中', completed: '已完成', failed: '失败' }
   return map[status || 'pending'] || '未知'
 }
 
@@ -293,7 +299,7 @@ onMounted(async () => {
   const projectId = route.params.id as string
   if (projectId) {
     // 从数据库加载最新项目信息（包括状态、进度、日志）
-    await prototypeStore.loadProjectFromDB(projectId)
+    await prototypeStore.loadTask(projectId)
     
     // 如果任务正在生成中，启动轮询
     if (currentProject.value?.status === 'generating') {
@@ -301,8 +307,8 @@ onMounted(async () => {
     }
   }
 
-  // 如果路由带有生成动作，自动开始生成
-  if (route.query.action === 'generate' && currentProject.value?.status === 'pending') {
+  // 如果路由带有生成动作，自动开始生成（不再检查 status === 'pending'，以便重新提交）
+  if (route.query.action === 'generate') {
     startGenerate()
   }
 })
@@ -330,21 +336,21 @@ watch(() => currentProject.value?.status, (newStatus, oldStatus) => {
 
 /** 启动状态轮询 */
 function startPolling() {
-  if (pollTimer) return
-  pollTimer = setInterval(async () => {
+  if (pollInterval) return
+  pollInterval = setInterval(async () => {
     const projectId = currentProject.value?.id
     if (!projectId) return
     
     // 从数据库刷新项目状态（心跳检测由后端任务管理器负责）
-    await prototypeStore.loadProjectFromDB(projectId)
+    await prototypeStore.loadTask(projectId)
   }, POLL_INTERVAL_MS)
 }
 
 /** 停止状态轮询 */
 function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  if (pollInterval) {
+    clearInterval(pollInterval)
+    pollInterval = null
   }
 }
 
@@ -370,13 +376,11 @@ async function cancelGenerate() {
   if (!projectId) return
   
   // 调用后端取消接口
-  const result = await window.electronAPI.taskCancel(projectId)
-  if (result.success) {
+  const result = await prototypeStore.cancelTask(projectId)
+  if (result) {
     ElMessage.info('已取消生成')
-    // 刷新状态
-    await prototypeStore.loadProjectFromDB(projectId)
   } else {
-    ElMessage.warning(result.error || '取消失败')
+    ElMessage.warning('取消失败')
   }
 }
 
@@ -393,17 +397,18 @@ async function startGenerate() {
   const settings = settingsStore.settings
   
   // 调用后端启动任务
-  const result = await window.electronAPI.taskStartGenerate(
+  const result = await prototypeStore.startTask(
     projectId,
     settings.apiKey,
     settings.baseUrl,
-    settings.model
+    settings.model,
+    settings.prompts
   )
   
   if (result.success) {
     ElMessage.success('任务已启动，正在后台生成...')
     // 刷新状态并启动轮询
-    await prototypeStore.loadProjectFromDB(projectId)
+    await prototypeStore.loadTask(projectId)
   } else {
     ElMessage.error(result.error || '启动任务失败')
   }
@@ -617,30 +622,18 @@ async function startGenerate() {
   margin-bottom: 32px;
 }
 
-/* 日志面板 */
-.log-panel {
-  position: fixed;
-  bottom: 0;
-  left: 200px;
-  right: 0;
-  background: var(--bg-white);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
-  z-index: 100;
-  transition: all 0.3s ease;
+/* 日志卡片 (内置于 state-card) */
+.card-logs {
+  margin-top: 32px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 24px;
+  text-align: left;
 }
 
-.log-panel.collapsed {
-  box-shadow: none;
-}
-
-.log-header {
+.card-logs-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  margin-bottom: 16px;
 }
 
 .log-title {
@@ -652,9 +645,9 @@ async function startGenerate() {
   color: var(--text-primary);
 }
 
-.log-content {
-  padding: 12px 24px;
-  max-height: 300px;
+.card-logs-content {
+  background: var(--bg);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -666,50 +659,42 @@ async function startGenerate() {
   gap: 12px;
   text-align: center;
   color: var(--text-tertiary);
-  padding: 24px;
+  padding: 32px;
   font-size: 13px;
 }
 
 .log-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  padding: 8px;
 }
 
 .log-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  font-size: 13px;
-  padding: 8px 12px;
-  background: var(--bg);
+  font-size: 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.log-item:hover {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .log-time {
   color: var(--text-tertiary);
   font-family: monospace;
-  font-size: 12px;
-  min-width: 70px;
+  min-width: 65px;
+  padding-top: 2px;
 }
 
 .log-message {
   color: var(--text-secondary);
   flex: 1;
-}
-
-/* 日志面板滑动动画 */
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+  line-height: 1.5;
 }
 
 /* 旋转动画 */

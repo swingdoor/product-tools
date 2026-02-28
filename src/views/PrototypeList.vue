@@ -4,7 +4,7 @@
     <header class="page-header">
       <div class="header-left">
         <h1 class="page-title">产品原型</h1>
-        <span class="task-count">共 {{ prototypeStore.projects.length }} 个任务</span>
+        <span class="task-count">共 {{ prototypeStore.tasks.length }} 个任务</span>
       </div>
       <div class="header-right">
         <el-button type="primary" @click="showCreateDialog = true">
@@ -16,7 +16,7 @@
 
     <!-- 任务列表表格 -->
     <main class="task-list-container">
-      <el-empty v-if="!prototypeStore.projects.length" description="暂无原型任务，点击「新建任务」开始创建">
+      <el-empty v-if="!prototypeStore.tasks.length" description="暂无原型任务，点击「新建任务」开始创建">
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
           新建任务
@@ -25,16 +25,12 @@
 
       <el-table
         v-else
-        :data="prototypeStore.projects"
+        :data="prototypeStore.tasks"
         style="width: 100%"
         row-key="id"
         class="task-table"
       >
-        <el-table-column prop="id" label="任务ID" width="140">
-          <template #default="{ row }">
-            <span class="task-id">{{ row.id.slice(0, 8) }}...</span>
-          </template>
-        </el-table-column>
+
 
         <el-table-column prop="title" label="任务名称" min-width="160">
           <template #default="{ row }">
@@ -60,18 +56,28 @@
 
         <el-table-column prop="updatedAt" label="更新时间" width="170" />
 
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <!-- 未提交/生成中/失败 → 进入生成页 -->
+              <!-- 未提交/失败 → 提交生成 -->
               <el-button
-                v-if="row.status !== 'completed'"
+                v-if="row.status === 'pending'"
                 type="primary"
                 size="small"
-                link
-                @click="goToGeneratePage(row)"
+                @click="goToGeneratePage(row, true)"
               >
-                进入生成页
+                提交生成
+              </el-button>
+
+              <!-- 已完成/失败 → 重新提交 -->
+              <el-button
+                v-if="row.status === 'completed' || row.status === 'failed'"
+                type="primary"
+                size="small"
+                plain
+                @click="goToGeneratePage(row, true)"
+              >
+                重新提交
               </el-button>
 
               <!-- 已完成 → 进入查看页 -->
@@ -79,10 +85,21 @@
                 v-if="row.status === 'completed'"
                 type="success"
                 size="small"
-                link
+                plain
                 @click="goToViewPage(row)"
               >
-                进入查看页
+                查看
+              </el-button>
+
+              <!-- 生成中 → 进入生成页 -->
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                plain
+                @click="goToGeneratePage(row)"
+              >
+                查看生成
               </el-button>
 
               <!-- 删除按钮 -->
@@ -93,7 +110,7 @@
                 @confirm="deleteTask(row)"
               >
                 <template #reference>
-                  <el-button type="danger" size="small" link>删除</el-button>
+                  <el-button type="danger" size="small" plain>删除</el-button>
                 </template>
               </el-popconfirm>
             </div>
@@ -173,7 +190,7 @@ const analysisStore = useProductAnalysisStore()
 
 // 初始化时从数据库加载项目
 onMounted(async () => {
-  await prototypeStore.loadProjectsFromDB()
+  await prototypeStore.loadTasks()
   await analysisStore.loadTasks() // 加载分析任务以供选择
 })
 
@@ -204,8 +221,8 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
 
 function getStatusText(status: TaskStatus): string {
   const map: Record<TaskStatus, string> = {
-    pending: '未提交',
-    generating: '生成中',
+    pending: '待提交',
+    generating: '执行中',
     completed: '已完成',
     failed: '失败'
   }
@@ -243,7 +260,7 @@ function resetForm() {
 async function handleCreateOnly() {
   if (!canCreate.value) return
 
-  await prototypeStore.createProject({
+  await prototypeStore.createTask({
     title: createForm.value.title.trim(),
     clientType: createForm.value.clientType,
     sourceAnalysisId: createForm.value.sourceAnalysisId,
@@ -260,7 +277,7 @@ async function handleCreateOnly() {
 async function handleCreateAndGenerate() {
   if (!canCreate.value) return
 
-  const project = await prototypeStore.createProject({
+  const project = await prototypeStore.createTask({
     title: createForm.value.title.trim(),
     clientType: createForm.value.clientType,
     sourceAnalysisId: createForm.value.sourceAnalysisId,
@@ -268,21 +285,27 @@ async function handleCreateAndGenerate() {
     data: null
   })
 
-  showCreateDialog.value = false
-  resetForm()
-  ElMessage.success('任务创建成功，开始生成...')
-  router.push({ name: 'PrototypeGenerate', params: { id: project.id }, query: { action: 'generate' } })
+  if (project) {
+    showCreateDialog.value = false
+    resetForm()
+    ElMessage.success('任务创建成功，开始生成...')
+    router.push({ name: 'PrototypeGenerate', params: { id: project.id }, query: { action: 'generate' } })
+  }
 }
 
 // 进入生成页
-function goToGeneratePage(project: PrototypeProject) {
-  prototypeStore.setCurrentProject(project)
-  router.push({ name: 'PrototypeGenerate', params: { id: project.id } })
+function goToGeneratePage(project: PrototypeProject, autoGenerate = false) {
+  prototypeStore.currentTask = project
+  if (autoGenerate) {
+    router.push({ name: 'PrototypeGenerate', params: { id: project.id }, query: { action: 'generate' } })
+  } else {
+    router.push({ name: 'PrototypeGenerate', params: { id: project.id } })
+  }
 }
 
 // 进入查看页
 function goToViewPage(project: PrototypeProject) {
-  prototypeStore.setCurrentProject(project)
+  prototypeStore.currentTask = project
   router.push({ name: 'PrototypeView', params: { id: project.id } })
 }
 
@@ -291,7 +314,7 @@ async function deleteTask(project: PrototypeProject) {
   if (project.status === 'generating') {
     window.electronAPI?.removeAiListeners?.()
   }
-  await prototypeStore.deleteProject(project.id)
+  await prototypeStore.deleteTask(project.id)
   ElMessage.success('已删除')
 }
 </script>
@@ -339,7 +362,7 @@ async function deleteTask(project: PrototypeProject) {
 
 .task-table {
   background: var(--bg-white);
-  border-radius: var(--radius-lg);
+  border-radius: 0 !important;
 }
 
 .task-id {
@@ -361,6 +384,7 @@ async function deleteTask(project: PrototypeProject) {
 .table-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .create-form {

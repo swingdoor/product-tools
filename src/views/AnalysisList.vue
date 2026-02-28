@@ -16,7 +16,7 @@
         />
         <el-select v-model="statusFilter" placeholder="状态筛选" clearable style="width: 120px">
           <el-option label="全部" value="" />
-          <el-option label="待执行" value="pending" />
+          <el-option label="待提交" value="pending" />
           <el-option label="执行中" value="generating" />
           <el-option label="已完成" value="completed" />
           <el-option label="失败" value="failed" />
@@ -33,6 +33,7 @@
       <el-table
         :data="filteredTasks"
         style="width: 100%"
+        class="task-table"
         :row-class-name="getRowClassName"
         @row-click="handleRowClick"
         v-loading="analysisStore.loading"
@@ -59,37 +60,50 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'pending'"
-              type="primary"
-              size="small"
-              @click.stop="handleSubmit(row)"
-            >提交分析</el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              type="primary"
-              size="small"
-              plain
-              @click.stop="goToView(row.id)"
-            >查看</el-button>
-            <el-button
-              v-if="row.status === 'generating'"
-              type="warning"
-              size="small"
-              plain
-              @click.stop="handleCancel(row)"
-            >取消</el-button>
-            <el-popconfirm
-              v-if="row.status === 'completed' || row.status === 'failed' || row.status === 'pending'"
-              title="确定删除此任务？"
-              @confirm="handleDelete(row.id)"
-            >
-              <template #reference>
-                <el-button type="danger" size="small" plain @click.stop>删除</el-button>
-              </template>
-            </el-popconfirm>
+            <div class="table-actions">
+              <el-button
+                v-if="row.status === 'pending'"
+                type="primary"
+                size="small"
+                @click.stop="handleSubmit(row)"
+              >提交分析</el-button>
+
+              <el-button
+                v-if="row.status === 'failed' || row.status === 'completed'"
+                type="primary"
+                size="small"
+                plain
+                @click.stop="handleSubmit(row)"
+              >重新提交</el-button>
+
+              <el-button
+                v-if="row.status === 'completed'"
+                type="success"
+                size="small"
+                plain
+                @click.stop="goToView(row.id)"
+              >查看</el-button>
+
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                plain
+                @click.stop="handleCancel(row)"
+              >取消</el-button>
+
+              <el-popconfirm
+                v-if="row.status !== 'generating'"
+                title="确定删除此任务？"
+                @confirm="handleDelete(row.id)"
+              >
+                <template #reference>
+                  <el-button type="danger" size="small" plain @click.stop>删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -116,7 +130,7 @@
             @change="onSelectReport"
           >
             <el-option
-              v-for="r in marketStore.reports"
+              v-for="r in marketStore.tasks"
               :key="r.id"
               :value="r.id"
               :label="`${r.industry} 市场洞察报告 (${r.createdAt})`"
@@ -133,7 +147,7 @@
             v-model="createForm.inputContent"
             type="textarea"
             :rows="8"
-            placeholder="粘贴市场报告内容或手动输入需要分析的内容..."
+            placeholder="粘贴市场报告内容 or 手动输入需要分析的内容..."
             maxlength="10000"
             show-word-limit
           />
@@ -208,7 +222,7 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
 }
 
 function getStatusText(status: TaskStatus): string {
-  const map = { pending: '待执行', generating: '执行中', completed: '已完成', failed: '失败' }
+  const map = { pending: '待提交', generating: '执行中', completed: '已完成', failed: '失败' }
   return map[status] || '未知'
 }
 
@@ -223,10 +237,10 @@ function onSelectReport(id: string) {
     createForm.value.inputContent = ''
     return
   }
-  const report = marketStore.getReportById(id)
-  if (report) {
-    createForm.value.sourceReportTitle = `${report.industry} 市场洞察报告`
-    createForm.value.inputContent = report.resultContent || ''
+  const task = marketStore.getTaskById(id)
+  if (task) {
+    createForm.value.sourceReportTitle = `${task.industry} 市场洞察报告`
+    createForm.value.inputContent = task.resultContent || ''
     ElMessage.success('已导入市场报告内容')
   }
 }
@@ -254,11 +268,12 @@ async function handleCreate() {
   if (task) {
     // 立即启动分析
     const settings = settingsStore.settings
-    const result = await analysisStore.startAnalysis(
+    const result = await analysisStore.startTask(
       task.id,
       settings.apiKey,
       settings.baseUrl,
-      settings.model
+      settings.model,
+      settings.prompts
     )
 
     if (result.success) {
@@ -275,7 +290,7 @@ async function handleCreate() {
 
 // 取消任务
 async function handleCancel(task: AnalysisTask) {
-  await analysisStore.cancelAnalysis(task.id)
+  await analysisStore.cancelTask(task.id)
   ElMessage.info('已取消任务')
 }
 
@@ -287,11 +302,12 @@ async function handleSubmit(task: AnalysisTask) {
   }
 
   const settings = settingsStore.settings
-  const result = await analysisStore.startAnalysis(
+  const result = await analysisStore.startTask(
     task.id,
     settings.apiKey,
     settings.baseUrl,
-    settings.model
+    settings.model,
+    settings.prompts
   )
 
   if (result.success) {
@@ -400,6 +416,11 @@ onUnmounted(() => {
   overflow: auto;
 }
 
+/* 移除表格圆角 */
+.task-table {
+  border-radius: 0 !important;
+}
+
 .task-name {
   display: flex;
   align-items: center;
@@ -426,6 +447,12 @@ onUnmounted(() => {
 
 .rotating {
   animation: rotating 1s linear infinite;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 @keyframes rotating {

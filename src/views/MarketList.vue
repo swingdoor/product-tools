@@ -4,7 +4,7 @@
     <header class="page-header">
       <div class="header-left">
         <h1 class="page-title">市场洞察</h1>
-        <span class="task-count">共 {{ marketStore.reports.length }} 份报告</span>
+        <span class="task-count">共 {{ marketStore.tasks.length }} 份报告</span>
       </div>
       <div class="header-right">
         <el-input
@@ -16,8 +16,8 @@
         />
         <el-select v-model="statusFilter" placeholder="状态筛选" clearable style="width: 120px">
           <el-option label="全部" value="" />
-          <el-option label="待生成" value="pending" />
-          <el-option label="生成中" value="generating" />
+          <el-option label="待提交" value="pending" />
+          <el-option label="执行中" value="generating" />
           <el-option label="已完成" value="completed" />
           <el-option label="失败" value="failed" />
         </el-select>
@@ -31,8 +31,9 @@
     <!-- 报告列表表格 -->
     <main class="page-content">
       <el-table
-        :data="filteredReports"
+        :data="filteredTasks"
         style="width: 100%"
+        class="task-table"
         :row-class-name="getRowClassName"
         @row-click="handleRowClick"
         v-loading="marketStore.loading"
@@ -42,6 +43,11 @@
             <div class="report-name">
               <el-icon v-if="row.status === 'generating'" class="rotating" color="#165DFF"><Loading /></el-icon>
               <span>{{ row.title }}</span>
+              <el-tooltip content="该报告已开启 Deep Research 联网检索" placement="top">
+                <el-tag v-if="row.deepSearch" size="small" type="warning" effect="dark" class="search-badge">
+                  Deep Research
+                </el-tag>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -54,37 +60,50 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'pending'"
-              type="primary"
-              size="small"
-              @click.stop="handleSubmit(row)"
-            >提交生成</el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              type="primary"
-              size="small"
-              plain
-              @click.stop="goToView(row.id)"
-            >查看</el-button>
-            <el-button
-              v-if="row.status === 'generating'"
-              type="warning"
-              size="small"
-              plain
-              @click.stop="handleCancel(row)"
-            >取消</el-button>
-            <el-popconfirm
-              v-if="row.status === 'completed' || row.status === 'failed' || row.status === 'pending'"
-              title="确定删除此报告？"
-              @confirm="handleDelete(row.id)"
-            >
-              <template #reference>
-                <el-button type="danger" size="small" plain @click.stop>删除</el-button>
-              </template>
-            </el-popconfirm>
+            <div class="table-actions">
+              <el-button
+                v-if="row.status === 'pending'"
+                type="primary"
+                size="small"
+                @click.stop="handleSubmit(row)"
+              >提交生成</el-button>
+              
+              <el-button
+                v-if="row.status === 'failed' || row.status === 'completed'"
+                type="primary"
+                size="small"
+                plain
+                @click.stop="handleSubmit(row)"
+              >重新提交</el-button>
+
+              <el-button
+                v-if="row.status === 'completed'"
+                type="success"
+                size="small"
+                plain
+                @click.stop="goToView(row.id)"
+              >查看</el-button>
+
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                plain
+                @click.stop="handleCancel(row)"
+              >取消</el-button>
+
+              <el-popconfirm
+                v-if="row.status !== 'generating'"
+                title="确定删除此报告？"
+                @confirm="handleDelete(row.id)"
+              >
+                <template #reference>
+                  <el-button type="danger" size="small" plain @click.stop>删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -127,12 +146,18 @@
             <el-checkbox v-for="area in focusAreaOptions" :key="area" :label="area">{{ area }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
-        <el-form-item label="参考数据源（可选）">
+        <el-form-item label="Deep Research (联网检索)">
+          <div class="search-toggle-desc">
+            <el-switch v-model="createForm.deepSearch" active-text="开启联网搜素" />
+            <span class="tip-text">启用后将实时从互联网获取行业动态，分析更准确但耗时稍长。</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="参考数据源 (可选)">
           <el-input
             v-model="createForm.dataSources"
             type="textarea"
             placeholder="粘贴参考资料、数据摘要或补充背景信息..."
-            :rows="4"
+            :rows="3"
             maxlength="2000"
             show-word-limit
           />
@@ -152,7 +177,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
-import { Plus, Loading } from '@element-plus/icons-vue'
+import { Plus, Loading, Search } from '@element-plus/icons-vue'
 import { useMarketInsightStore, type MarketReport, type TaskStatus } from '@/stores/marketInsight'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -172,7 +197,8 @@ const createForm = ref({
   industry: '',
   targetUsersList: [] as string[],
   focusAreas: [] as string[],
-  dataSources: ''
+  dataSources: '',
+  deepSearch: true // 默认开启
 })
 
 // 预设选项
@@ -183,20 +209,20 @@ const focusAreaOptions = ['市场规模', '竞争格局', '用户画像', '技�
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const POLL_INTERVAL = 3000
 
-// 过滤后的报告列表
-const filteredReports = computed(() => {
-  return marketStore.reports.filter(report => {
+// 过滤后的任务列表
+const filteredTasks = computed(() => {
+  return marketStore.tasks.filter(task => {
     const matchKeyword = !searchKeyword.value || 
-      report.title.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-      report.industry.toLowerCase().includes(searchKeyword.value.toLowerCase())
-    const matchStatus = !statusFilter.value || report.status === statusFilter.value
+      task.title.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
+      task.industry.toLowerCase().includes(searchKeyword.value.toLowerCase())
+    const matchStatus = !statusFilter.value || task.status === statusFilter.value
     return matchKeyword && matchStatus
   })
 })
 
 // 能否创建报告（行业必填，标题可自动生成）
 const canCreate = computed(() => {
-  return createForm.value.industry.trim() && settingsStore.isConfigured
+  return !!createForm.value.industry.trim()
 })
 
 // 状态映射
@@ -211,7 +237,7 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
 }
 
 function getStatusText(status: TaskStatus): string {
-  const map = { pending: '待生成', generating: '生成中', completed: '已完成', failed: '失败' }
+  const map = { pending: '待提交', generating: '执行中', completed: '已完成', failed: '失败' }
   return map[status] || '未知'
 }
 
@@ -221,7 +247,7 @@ function getRowClassName({ row }: { row: MarketReport }): string {
 
 // 重置表单
 function resetForm() {
-  createForm.value = { title: '', industry: '', targetUsersList: [], focusAreas: [], dataSources: '' }
+  createForm.value = { title: '', industry: '', targetUsersList: [], focusAreas: [], dataSources: '', deepSearch: true }
 }
 
 // 创建报告
@@ -235,28 +261,37 @@ async function handleCreate() {
 
   creating.value = true
   try {
+    console.log('[MarketList] Starting handleCreate', JSON.parse(JSON.stringify(createForm.value)))
+    
     // 自动生成标题
     const title = createForm.value.title || `${createForm.value.industry} 市场洞察报告`
+    
+    // 确保数据是非响应式的纯对象
+    const targetUsers = (createForm.value.targetUsersList || []).join(',')
+    const focusAreas = [...(createForm.value.focusAreas || [])]
 
-    // 创建报告（传递纯 JavaScript 对象，避免 Vue reactive 对象无法 IPC 克隆）
-    const { report, error: createError } = await marketStore.createReport({
+    const { task, error: createError } = await marketStore.createTask({
       title,
-      industry: createForm.value.industry,
-      targetUsers: createForm.value.targetUsersList.join(','),
-      focusAreas: [...createForm.value.focusAreas],
-      dataSources: createForm.value.dataSources
+      industry: String(createForm.value.industry || ''),
+      targetUsers,
+      focusAreas,
+      dataSources: String(createForm.value.dataSources || ''),
+      deepSearch: !!createForm.value.deepSearch
     })
 
-    if (report) {
-      // 立即启动生成
+    console.log('[MarketList] Task created result:', { task, createError })
+    
+    if (task) {
       const settings = settingsStore.settings
-      const result = await marketStore.startGenerate(
-        report.id,
+      const result = await marketStore.startTask(
+        task.id,
         settings.apiKey,
         settings.baseUrl,
-        settings.model
+        settings.model,
+        settings.prompts,
+        settings.searchConfig
       )
-
+      
       if (result.success) {
         ElMessage.success('报告已创建并开始生成')
         showCreateDialog.value = false
@@ -267,27 +302,29 @@ async function handleCreate() {
     } else {
       ElMessage.error(createError || '创建报告失败')
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('创建报告异常:', err)
-    ElMessage.error('创建报告时发生错误')
+    ElMessage.error(`创建报告时发生错误: ${err.message || String(err)}`)
   } finally {
     creating.value = false
   }
 }
 
 // 提交生成（重新启动 pending 状态的报告）
-async function handleSubmit(report: MarketReport) {
+async function handleSubmit(task: MarketReport) {
   if (!settingsStore.isConfigured) {
     ElNotification.warning({ title: '请先配置AI', message: '前往"设置"配置API Key', duration: 3000 })
     return
   }
 
   const settings = settingsStore.settings
-  const result = await marketStore.startGenerate(
-    report.id,
+  const result = await marketStore.startTask(
+    task.id,
     settings.apiKey,
     settings.baseUrl,
-    settings.model
+    settings.model,
+    settings.prompts,
+    settings.searchConfig
   )
 
   if (result.success) {
@@ -299,14 +336,14 @@ async function handleSubmit(report: MarketReport) {
 }
 
 // 取消生成
-async function handleCancel(report: MarketReport) {
-  await marketStore.cancelGenerate(report.id)
+async function handleCancel(task: MarketReport) {
+  await marketStore.cancelTask(task.id)
   ElMessage.info('已取消生成')
 }
 
 // 删除报告
 async function handleDelete(id: string) {
-  const success = await marketStore.deleteReport(id)
+  const success = await marketStore.deleteTask(id)
   if (success) {
     ElMessage.success('删除成功')
   }
@@ -328,9 +365,9 @@ function handleRowClick(row: MarketReport) {
 function startPolling() {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
-    // 只有有生成中报告时才轮询
+    // 只有有执行中报告时才轮询
     if (marketStore.generatingCount > 0) {
-      await marketStore.loadReports()
+      await marketStore.loadTasks()
     }
   }, POLL_INTERVAL)
 }
@@ -344,7 +381,7 @@ function stopPolling() {
 
 // 生命周期
 onMounted(async () => {
-  await marketStore.loadReports()
+  await marketStore.loadTasks()
   if (marketStore.generatingCount > 0) {
     startPolling()
   }
@@ -402,11 +439,36 @@ onUnmounted(() => {
   overflow: auto;
 }
 
+/* 移除表格圆角 */
+.task-table {
+  border-radius: 0 !important;
+}
+
+.search-toggle-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tip-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
 .report-name {
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
+}
+
+.search-badge {
+  font-size: 11px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-weight: bold;
 }
 
 :deep(.generating-row) {
@@ -415,6 +477,12 @@ onUnmounted(() => {
 
 .rotating {
   animation: rotating 1s linear infinite;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 @keyframes rotating {

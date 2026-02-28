@@ -49,6 +49,12 @@
         <span class="info-label">更新时间</span>
         <span class="info-value">{{ report.updatedAt }}</span>
       </div>
+      <div v-if="report.deepSearch" class="info-item">
+        <span class="info-label">研究模式</span>
+        <el-tag size="small" type="warning" effect="dark" class="res-badge">
+          Deep Research 联网检索
+        </el-tag>
+      </div>
     </div>
 
     <!-- 内容区 -->
@@ -105,7 +111,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, Edit, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, View, Edit, Download, Search } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { useMarketInsightStore, type MarketReport, type TaskStatus } from '@/stores/marketInsight'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -347,6 +353,12 @@ onMounted(() => {
   background: #E8F3FF;
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.res-badge {
+  font-weight: bold;
+  height: 22px;
+  padding: 0 8px;
 }
 
 .page-content {

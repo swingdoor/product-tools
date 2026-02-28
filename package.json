@@ -4,16 +4,18 @@
   "description": "AI辅助产品工具客户端 - 市场洞察、产品需求分析、产品原型",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "chcp 65001 > nul && vite",
     "build": "vue-tsc --noEmit && vite build",
     "build:electron": "node scripts/build-electron.js",
     "build:all": "npm run build && npm run build:electron",
-    "electron:dev": "set ELECTRON=true&& vite",
+    "electron:dev": "chcp 65001 > nul && set ELECTRON=true&& vite",
     "electron:build": "npm run build:all && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.0.0-rc.12",
     "dayjs": "^1.11.10",
     "docx": "^8.5.0",
     "electron-store": "^8.2.0",
@@ -32,6 +34,7 @@
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/fabric": "^5.3.7",
     "@types/file-saver": "^2.0.7",
     "@types/markdown-it": "^14.1.1",
@@ -72,7 +75,7 @@
       "target": "AppImage",
       "icon": "build/icon.png"
     },
-    "npmRebuild": false,
-    "nodeGypRebuild": false
+    "npmRebuild": true,
+    "nodeGypRebuild": true
   }
 }

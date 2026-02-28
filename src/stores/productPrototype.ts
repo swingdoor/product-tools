@@ -23,89 +23,91 @@ const MAX_VERSIONS = 10
 const isElectron = () => typeof window !== 'undefined' && window.electronAPI
 
 export const useProductPrototypeStore = defineStore('productPrototype', () => {
-  const projects = ref<PrototypeProject[]>([])
-  const currentProject = ref<PrototypeProject | null>(null)
+  const tasks = ref<PrototypeProject[]>([])
+  const currentTask = ref<PrototypeProject | null>(null)
   const currentPageIndex = ref<number>(0)
-  const taskLogs = ref<TaskLog[]>([])
-  const isLoading = ref(false)
+  const currentTaskLogs = ref<TaskLog[]>([])
+  const loading = ref(false)
 
   // ────────────────────────────────────────────────────────────
   // 数据库操作方法
   // ────────────────────────────────────────────────────────────
 
-  /** 从数据库加载所有项目 */
-  async function loadProjectsFromDB() {
+  /** 从数据库加载所有任务 */
+  async function loadTasks() {
     if (!isElectron()) return
-    isLoading.value = true
+    loading.value = true
     try {
       const result = await window.electronAPI.dbGetProjects()
       if (result.success && result.data) {
-        projects.value = result.data
+        tasks.value = result.data
       }
+    } catch (err) {
+      console.error('[PrototypeStore] 加载任务失败:', err)
     } finally {
-      isLoading.value = false
+      loading.value = false
     }
   }
 
-  /** 从数据库加载单个项目 */
-  async function loadProjectFromDB(id: string) {
+  /** 从数据库加载单个任务 */
+  async function loadTask(id: string) {
     if (!isElectron()) return null
-    isLoading.value = true
+    loading.value = true
     try {
       const result = await window.electronAPI.dbGetProject(id)
       if (result.success && result.data) {
-        currentProject.value = result.data
-        // 同时更新列表中的项目
-        const idx = projects.value.findIndex(p => p.id === id)
+        currentTask.value = result.data
+        // 同时更新列表中的任务
+        const idx = tasks.value.findIndex(p => p.id === id)
         if (idx !== -1) {
-          projects.value[idx] = result.data
+          tasks.value[idx] = result.data
         }
-        // 加载项目日志
-        await loadLogsFromDB(id)
+        // 加载任务日志
+        await loadTaskLogs(id)
         return result.data
       }
       return null
     } finally {
-      isLoading.value = false
+      loading.value = false
     }
   }
 
-  /** 保存项目到数据库 */
-  async function saveProjectToDB(project: PrototypeProject) {
-    if (!isElectron()) return project
+  /** 加载任务日志 */
+  async function loadTaskLogs(taskId: string) {
+    if (!isElectron()) return
     try {
-      const result = await window.electronAPI.dbSaveProject(project)
+      const result = await window.electronAPI.dbGetLogs(taskId)
+      if (result.success && result.data) {
+        currentTaskLogs.value = result.data
+      }
+    } catch (err) {
+      console.error('加载日志失败:', err)
+    }
+  }
+
+  /** 保存任务到数据库 */
+  async function saveTaskToDB(task: PrototypeProject) {
+    if (!isElectron()) return task
+    try {
+      const result = await window.electronAPI.dbSaveProject(JSON.parse(JSON.stringify(task)))
       if (result.success && result.data) {
         return result.data
       }
     } catch (err) {
-      console.error('保存项目失败:', err)
+      console.error('保存任务失败:', err)
     }
-    return project
+    return task
   }
 
-  /** 从数据库删除项目 */
-  async function deleteProjectFromDB(id: string) {
+  /** 从数据库删除任务 */
+  async function deleteTaskFromDB(id: string) {
     if (!isElectron()) return false
     try {
       const result = await window.electronAPI.dbDeleteProject(id)
       return result.success
     } catch (err) {
-      console.error('删除项目失败:', err)
+      console.error('删除任务失败:', err)
       return false
-    }
-  }
-
-  /** 加载项目日志 */
-  async function loadLogsFromDB(taskId: string) {
-    if (!isElectron()) return
-    try {
-      const result = await window.electronAPI.dbGetLogs(taskId)
-      if (result.success && result.data) {
-        taskLogs.value = result.data
-      }
-    } catch (err) {
-      console.error('加载日志失败:', err)
     }
   }
 
@@ -121,10 +123,10 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
 
     if (isElectron()) {
       try {
-        const result = await window.electronAPI.dbAddLog(logInput)
+        const result = await window.electronAPI.dbAddLog(JSON.parse(JSON.stringify(logInput)))
         if (result.success && result.data) {
           // 添加到当前日志列表的开头
-          taskLogs.value.unshift(result.data)
+          currentTaskLogs.value.unshift(result.data)
           return result.data
         }
       } catch (err) {
@@ -137,7 +139,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
       ...logInput,
       id: `log_${Date.now()}`
     }
-    taskLogs.value.unshift(localLog)
+    currentTaskLogs.value.unshift(localLog)
     return localLog
   }
 
@@ -145,7 +147,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   // 项目操作方法
   // ────────────────────────────────────────────────────────────
 
-  async function createProject(data: Omit<PrototypeProject, 'id' | 'createdAt' | 'updatedAt' | 'versions' | 'status'>): Promise<PrototypeProject> {
+  async function createTask(data: Omit<PrototypeProject, 'id' | 'createdAt' | 'updatedAt' | 'versions' | 'status'>): Promise<PrototypeProject> {
     const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
     const project: PrototypeProject = {
       ...data,
@@ -157,14 +159,14 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
     }
 
     // 保存到数据库
-    const saved = await saveProjectToDB(project)
+    const saved = await saveTaskToDB(project)
 
     // 更新本地状态
-    projects.value.unshift(saved)
-    if (projects.value.length > 50) {
-      projects.value = projects.value.slice(0, 50)
+    tasks.value.unshift(saved)
+    if (tasks.value.length > 50) {
+      tasks.value = tasks.value.slice(0, 50)
     }
-    currentProject.value = saved
+    currentTask.value = saved
 
     // 记录创建日志
     await addLog(saved.id, 'create', `创建任务: ${saved.title}`)
@@ -173,18 +175,19 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   }
 
   /** 更新任务状态和进度 */
-  async function updateProjectStatus(id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) {
+  async function updateTaskStatus(id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) {
     if (isElectron()) {
       try {
-        const result = await window.electronAPI.dbUpdateStatusProgress(id, status, progress, errorMessage)
+        const cleanProgress = progress ? JSON.parse(JSON.stringify(progress)) : undefined
+        const result = await window.electronAPI.dbUpdateStatusProgress(id, status, cleanProgress, errorMessage)
         if (result.success && result.data) {
           // 更新本地状态
-          const idx = projects.value.findIndex(p => p.id === id)
+          const idx = tasks.value.findIndex(p => p.id === id)
           if (idx !== -1) {
-            projects.value[idx] = result.data
+            tasks.value[idx] = result.data
           }
-          if (currentProject.value?.id === id) {
-            currentProject.value = result.data
+          if (currentTask.value?.id === id) {
+            currentTask.value = result.data
           }
         }
       } catch (err) {
@@ -192,14 +195,14 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
       }
     } else {
       // 非 Electron 环境
-      const project = projects.value.find(p => p.id === id)
+      const project = tasks.value.find(p => p.id === id)
       if (project) {
         project.status = status
         project.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
         if (progress) project.progress = { ...project.progress, ...progress } as GenerateProgress
         if (errorMessage) project.errorMessage = errorMessage
-        if (currentProject.value?.id === id) {
-          currentProject.value = { ...project }
+        if (currentTask.value?.id === id) {
+          currentTask.value = { ...project }
         }
       }
     }
@@ -211,31 +214,56 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
       completed: '已完成',
       failed: '失败'
     }
-    const project = projects.value.find(p => p.id === id)
+    const project = tasks.value.find(p => p.id === id)
     if (project) {
       await addLog(id, 'status_change', `状态变更: → ${statusMap[status]}`, errorMessage)
     }
   }
 
+  /** 启动生成任务 */
+  async function startTask(
+    projectId: string,
+    apiKey: string,
+    baseUrl: string,
+    model?: string,
+    prompts?: Record<string, string>
+  ): Promise<{ success: boolean; error?: string }> {
+    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
+    const result = await window.electronAPI.taskStartGenerate(projectId, apiKey, baseUrl, model, cleanPrompts)
+    if (result.success) {
+      await loadTask(projectId)
+    }
+    return result
+  }
+
+  /** 取消生成任务 */
+  async function cancelTask(projectId: string): Promise<{ success: boolean; error?: string }> {
+    const result = await window.electronAPI.taskCancel(projectId)
+    if (result.success) {
+      await loadTask(projectId)
+    }
+    return result
+  }
+
   /** 更新任务进度（自动更新心跳时间戳） */
-  async function updateProjectProgress(id: string, progress: Partial<GenerateProgress>) {
+  async function updateTaskProgress(id: string, progress: Partial<GenerateProgress>) {
     // 自动添加心跳时间戳
     const progressWithHeartbeat = {
       ...progress,
       lastHeartbeat: new Date().toISOString()
     }
-    
+
     if (isElectron()) {
       try {
-        const result = await window.electronAPI.dbUpdateProgress(id, progressWithHeartbeat)
+        const result = await window.electronAPI.dbUpdateProgress(id, JSON.parse(JSON.stringify(progressWithHeartbeat)))
         if (result.success && result.data) {
           // 更新本地状态
-          const idx = projects.value.findIndex(p => p.id === id)
+          const idx = tasks.value.findIndex(p => p.id === id)
           if (idx !== -1) {
-            projects.value[idx] = result.data
+            tasks.value[idx] = result.data
           }
-          if (currentProject.value?.id === id) {
-            currentProject.value = result.data
+          if (currentTask.value?.id === id) {
+            currentTask.value = result.data
           }
           return result.data
         }
@@ -244,12 +272,12 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
       }
     } else {
       // 非 Electron 环境
-      const project = projects.value.find(p => p.id === id)
+      const project = tasks.value.find(p => p.id === id)
       if (project) {
         project.progress = { ...project.progress, ...progressWithHeartbeat } as GenerateProgress
         project.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
-        if (currentProject.value?.id === id) {
-          currentProject.value = { ...project }
+        if (currentTask.value?.id === id) {
+          currentTask.value = { ...project }
         }
         return project
       }
@@ -258,113 +286,125 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   }
 
   /** 根据 ID 获取项目 */
-  function getProjectById(id: string): PrototypeProject | undefined {
-    return projects.value.find(p => p.id === id)
+  function getTaskById(id: string): PrototypeProject | undefined {
+    return tasks.value.find(p => p.id === id)
   }
 
   /** 保存当前状态为一个版本快照 */
   async function saveVersion(description = '手动保存') {
-    if (!currentProject.value?.data) return
+    if (!currentTask.value?.data) return
     const version: PrototypeVersion = {
       id: `v_${Date.now()}`,
-      data: JSON.parse(JSON.stringify(currentProject.value.data)),
+      data: JSON.parse(JSON.stringify(currentTask.value.data)),
       savedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
       description
     }
-    currentProject.value.versions.unshift(version)
-    if (currentProject.value.versions.length > MAX_VERSIONS) {
-      currentProject.value.versions = currentProject.value.versions.slice(0, MAX_VERSIONS)
+    currentTask.value.versions.unshift(version)
+    if (currentTask.value.versions.length > MAX_VERSIONS) {
+      currentTask.value.versions = currentTask.value.versions.slice(0, MAX_VERSIONS)
     }
     await syncCurrentToList()
   }
 
   /** 恢复到某个版本 */
   async function restoreVersion(versionId: string) {
-    if (!currentProject.value) return
-    const version = currentProject.value.versions.find(v => v.id === versionId)
+    if (!currentTask.value) return
+    const version = currentTask.value.versions.find(v => v.id === versionId)
     if (version) {
-      currentProject.value.data = JSON.parse(JSON.stringify(version.data))
+      currentTask.value.data = JSON.parse(JSON.stringify(version.data))
       await syncCurrentToList()
     }
   }
 
   /** 更新原型数据 */
   async function updatePrototypeData(data: PrototypeData) {
-    if (!currentProject.value) return
-    currentProject.value.data = data
-    currentProject.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    if (!currentTask.value) return
+    currentTask.value.data = data
+    currentTask.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
     await syncCurrentToList()
   }
 
   /** 更新单个页面的 HTML 内容 */
   async function updatePageHtml(pageIndex: number, htmlContent: string) {
-    if (!currentProject.value?.data) return
-    const page = currentProject.value.data.pages[pageIndex]
+    if (!currentTask.value?.data) return
+    const page = currentTask.value.data.pages[pageIndex]
     if (!page) return
     page.htmlContent = htmlContent
-    currentProject.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    currentTask.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
     await syncCurrentToList()
   }
 
   /** 更新单个页面的提示词 */
   async function updatePagePrompt(pageIndex: number, prompt: string) {
-    if (!currentProject.value?.data) return
-    const page = currentProject.value.data.pages[pageIndex]
+    if (!currentTask.value?.data) return
+    const page = currentTask.value.data.pages[pageIndex]
     if (!page) return
     page.prompt = prompt
-    currentProject.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    currentTask.value.updatedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
     await syncCurrentToList()
   }
 
-  async function deleteProject(id: string) {
+  async function deleteTask(id: string) {
     // 从数据库删除
-    await deleteProjectFromDB(id)
+    await deleteTaskFromDB(id)
 
     // 从本地状态删除
-    projects.value = projects.value.filter(p => p.id !== id)
-    if (currentProject.value?.id === id) {
-      currentProject.value = null
+    tasks.value = tasks.value.filter(p => p.id !== id)
+    if (currentTask.value?.id === id) {
+      currentTask.value = null
     }
+    return true
   }
 
-  function setCurrentProject(project: PrototypeProject | null) {
-    currentProject.value = project
+  function setCurrentTask(project: PrototypeProject | null) {
+    currentTask.value = project
     currentPageIndex.value = 0
     // 清空当前日志
-    taskLogs.value = []
+    currentTaskLogs.value = []
   }
 
   async function syncCurrentToList() {
-    if (!currentProject.value) return
-    const idx = projects.value.findIndex(p => p.id === currentProject.value!.id)
+    if (!currentTask.value) return
+    const idx = tasks.value.findIndex(p => p.id === currentTask.value!.id)
     if (idx !== -1) {
-      projects.value[idx] = { ...currentProject.value }
+      tasks.value[idx] = { ...currentTask.value }
     }
     // 保存到数据库
-    await saveProjectToDB(currentProject.value)
+    await saveTaskToDB(currentTask.value)
   }
 
+  // ────────────────────────────────────────────────────────────
+  // 计算属性
+  // ────────────────────────────────────────────────────────────
+
+  const generatingCount = computed(() => tasks.value.filter(t => t.status === 'generating').length)
+  const completedCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
+
   return {
-    projects,
-    currentProject,
+    tasks,
+    currentTask,
     currentPageIndex,
-    taskLogs,
-    isLoading,
+    currentTaskLogs,
+    loading,
+    generatingCount,
+    completedCount,
     // 数据库方法
-    loadProjectsFromDB,
-    loadProjectFromDB,
+    loadTasks,
+    loadTask,
     addLog,
     // 项目方法
-    createProject,
-    updateProjectStatus,
-    updateProjectProgress,
-    getProjectById,
+    createTask,
+    updateTaskStatus,
+    updateTaskProgress,
+    startTask,
+    cancelTask,
+    getTaskById,
     saveVersion,
     restoreVersion,
     updatePrototypeData,
     updatePageHtml,
     updatePagePrompt,
-    deleteProject,
-    setCurrentProject
+    deleteTask,
+    setCurrentTask
   }
 })

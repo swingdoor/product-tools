@@ -10,7 +10,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   // 当前任务
   const currentTask = ref<AnalysisTask | null>(null)
   // 当前任务日志
-  const taskLogs = ref<TaskLog[]>([])
+  const currentTaskLogs = ref<TaskLog[]>([])
   // 加载状态
   const loading = ref(false)
 
@@ -26,6 +26,8 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
       if (result.success && result.data) {
         tasks.value = result.data
       }
+    } catch (err) {
+      console.error('[AnalysisStore] 加载任务失败:', err)
     } finally {
       loading.value = false
     }
@@ -51,7 +53,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   async function loadTaskLogs(taskId: string) {
     const result = await window.electronAPI.analysisGetLogs(taskId)
     if (result.success && result.data) {
-      taskLogs.value = result.data
+      currentTaskLogs.value = result.data
     }
   }
 
@@ -74,7 +76,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
       updatedAt: now
     }
 
-    const result = await window.electronAPI.analysisSaveTask(newTask)
+    const result = await window.electronAPI.analysisSaveTask(JSON.parse(JSON.stringify(newTask)))
     if (result.success && result.data) {
       tasks.value.unshift(result.data)
       return result.data
@@ -85,7 +87,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   /** 更新任务 */
   async function updateTask(task: AnalysisTask): Promise<boolean> {
     task.updatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
-    const result = await window.electronAPI.analysisSaveTask(task)
+    const result = await window.electronAPI.analysisSaveTask(JSON.parse(JSON.stringify(task)))
     if (result.success && result.data) {
       const idx = tasks.value.findIndex(t => t.id === task.id)
       if (idx !== -1) {
@@ -113,13 +115,15 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   }
 
   /** 启动分析任务 */
-  async function startAnalysis(
+  async function startTask(
     taskId: string,
     apiKey: string,
     baseUrl: string,
-    model?: string
+    model?: string,
+    prompts?: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> {
-    const result = await window.electronAPI.analysisStart(taskId, apiKey, baseUrl, model)
+    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
+    const result = await window.electronAPI.analysisStart(taskId, apiKey, baseUrl, model, cleanPrompts)
     if (result.success) {
       // 刷新任务状态
       await loadTask(taskId)
@@ -128,7 +132,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   }
 
   /** 取消分析任务 */
-  async function cancelAnalysis(taskId: string): Promise<boolean> {
+  async function cancelTask(taskId: string): Promise<boolean> {
     const result = await window.electronAPI.analysisCancel(taskId)
     if (result.success) {
       await loadTask(taskId)
@@ -142,19 +146,19 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   // ────────────────────────────────────────────────────────────
 
   /** 生成中的任务数 */
-  const generatingCount = computed(() => 
+  const generatingCount = computed(() =>
     tasks.value.filter(t => t.status === 'generating').length
   )
 
   /** 已完成的任务数 */
-  const completedCount = computed(() => 
+  const completedCount = computed(() =>
     tasks.value.filter(t => t.status === 'completed').length
   )
 
   return {
     tasks,
     currentTask,
-    taskLogs,
+    currentTaskLogs,
     loading,
     loadTasks,
     loadTask,
@@ -162,8 +166,8 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
     createTask,
     updateTask,
     deleteTask,
-    startAnalysis,
-    cancelAnalysis,
+    startTask,
+    cancelTask,
     generatingCount,
     completedCount
   }

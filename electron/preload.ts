@@ -52,13 +52,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 更新项目进度 */
   dbUpdateProgress: (id: string, progress: GenerateProgressInput) => ipcRenderer.invoke('db:update-progress', { id, progress }),
   /** 更新项目状态和进度 */
-  dbUpdateStatusProgress: (id: string, status: TaskStatus, progress?: GenerateProgressInput, errorMessage?: string) => 
+  dbUpdateStatusProgress: (id: string, status: TaskStatus, progress?: GenerateProgressInput, errorMessage?: string) =>
     ipcRenderer.invoke('db:update-status-progress', { id, status, progress, errorMessage }),
 
   // ── 后台任务执行 ─────────────────────────────────────────
   /** 启动原型生成任务（后端执行） */
-  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string) => 
-    ipcRenderer.invoke('task:start-generate', { projectId, apiKey, baseUrl, model }),
+  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
+    ipcRenderer.invoke('task:start-generate', { projectId, apiKey, baseUrl, model, prompts }),
   /** 取消任务 */
   taskCancel: (projectId: string) => ipcRenderer.invoke('task:cancel', projectId),
 
@@ -74,8 +74,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取分析任务日志 */
   analysisGetLogs: (taskId: string) => ipcRenderer.invoke('analysis:get-logs', taskId),
   /** 启动分析任务 */
-  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string) =>
-    ipcRenderer.invoke('analysis:start', { taskId, apiKey, baseUrl, model }),
+  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
+    ipcRenderer.invoke('analysis:start', { taskId, apiKey, baseUrl, model, prompts }),
   /** 取消分析任务 */
   analysisCancel: (taskId: string) => ipcRenderer.invoke('analysis:cancel', taskId),
 
@@ -91,8 +91,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取市场报告日志 */
   marketGetLogs: (taskId: string) => ipcRenderer.invoke('market:get-logs', taskId),
   /** 启动市场报告生成 */
-  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string) =>
-    ipcRenderer.invoke('market:start', { reportId, apiKey, baseUrl, model }),
+  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>, searchConfig?: { enabled: boolean; sources: string[] }) =>
+    ipcRenderer.invoke('market:start', { reportId, apiKey, baseUrl, model, prompts, searchConfig }),
   /** 取消市场报告生成 */
   marketCancel: (reportId: string) => ipcRenderer.invoke('market:cancel', reportId),
 
@@ -108,8 +108,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取设计文档日志 */
   designGetLogs: (taskId: string) => ipcRenderer.invoke('design:get-logs', taskId),
   /** 启动设计文档生成 */
-  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string) =>
-    ipcRenderer.invoke('design:start', { docId, apiKey, baseUrl, model }),
+  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
+    ipcRenderer.invoke('design:start', { docId, apiKey, baseUrl, model, prompts }),
   /** 取消设计文档生成 */
   designCancel: (docId: string) => ipcRenderer.invoke('design:cancel', docId),
 
@@ -121,7 +121,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 清除所有产品原型 */
   dataClearPrototype: () => ipcRenderer.invoke('data:clear-prototype'),
   /** 清除所有设计文档 */
-  dataClearDesign: () => ipcRenderer.invoke('data:clear-design')
+  dataClearDesign: () => ipcRenderer.invoke('data:clear-design'),
+
+  // ── 应用配置 ───────────────────────────────────────
+  /** 获取配置文件物理路径 */
+  appGetConfigPath: () => ipcRenderer.invoke('app:get-config-path'),
+  /** 打开配置文件所在文件夹 */
+  appOpenConfigFolder: () => ipcRenderer.invoke('app:open-config-folder'),
+
+  // ── 应用配置 (config.json) ───────────────────────────
+  /** 获取应用设置 */
+  configGet: () => ipcRenderer.invoke('config:get'),
+  /** 保存应用设置 */
+  configSave: (settings: any) => ipcRenderer.invoke('config:save', settings),
+  /** 获取 config.json 路径 */
+  configGetPath: () => ipcRenderer.invoke('config:get-path')
 })
 
 // ────────────────────────────────────────────────────────────
@@ -203,6 +217,7 @@ interface MarketReportInput {
   targetUsers: string
   focusAreas: string[]
   dataSources: string
+  deepSearch?: boolean
   resultContent?: string
   createdAt: string
   updatedAt: string

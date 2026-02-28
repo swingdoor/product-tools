@@ -1,7 +1,7 @@
 // 渲染进程中 window.electronAPI 的类型声明
 
 interface AiCallParams {
-  type: 'market-insight' | 'product-analysis' | 'product-prototype' | 'prototype-plan' | 'prototype-page'
+  type: 'market-insight' | 'product-analysis' | 'prototype-plan' | 'prototype-page'
   payload: Record<string, unknown>
   apiKey: string
   baseUrl: string
@@ -107,6 +107,7 @@ export interface MarketReport {
   targetUsers: string
   focusAreas: string[]
   dataSources: string
+  deepSearch?: boolean
   resultContent?: string
   createdAt: string
   updatedAt: string
@@ -165,13 +166,13 @@ interface ElectronAPI {
   onAiStreamDone: (callback: (data: { content: string; type: string }) => void) => void
   onAiStreamError: (callback: (data: { error: string; type: string }) => void) => void
   removeAiListeners: () => void
-  
+
   // 文件操作
   showSaveDialog: (options: SaveDialogOptions) => Promise<SaveDialogResult>
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
   openFile: (filePath: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
-  
+
   // 数据库操作
   dbGetProjects: () => Promise<DbResult<PrototypeProject[]>>
   dbGetProject: (id: string) => Promise<DbResult<PrototypeProject | undefined>>
@@ -181,43 +182,52 @@ interface ElectronAPI {
   dbAddLog: (log: TaskLogInput) => Promise<DbResult<TaskLog>>
   dbUpdateProgress: (id: string, progress: Partial<GenerateProgress>) => Promise<DbResult<PrototypeProject>>
   dbUpdateStatusProgress: (id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) => Promise<DbResult<PrototypeProject>>
-  
+
   // 后台任务执行
-  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
   taskCancel: (projectId: string) => Promise<{ success: boolean; error?: string }>
-  
+
   // 需求分析任务
   analysisGetTasks: () => Promise<DbResult<AnalysisTask[]>>
   analysisGetTask: (id: string) => Promise<DbResult<AnalysisTask | undefined>>
   analysisSaveTask: (task: AnalysisTask) => Promise<DbResult<AnalysisTask>>
   analysisDeleteTask: (id: string) => Promise<DbResult<boolean>>
   analysisGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
   analysisCancel: (taskId: string) => Promise<{ success: boolean; error?: string }>
-  
+
   // 市场报告任务
   marketGetReports: () => Promise<DbResult<MarketReport[]>>
   marketGetReport: (id: string) => Promise<DbResult<MarketReport | undefined>>
   marketSaveReport: (report: MarketReport) => Promise<DbResult<MarketReport>>
   marketDeleteReport: (id: string) => Promise<DbResult<boolean>>
   marketGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>, searchConfig?: { enabled: boolean; sources: string[] }) => Promise<{ success: boolean; error?: string }>
   marketCancel: (reportId: string) => Promise<{ success: boolean; error?: string }>
-  
+
   // 设计文档任务
   designGetDocs: () => Promise<DbResult<DesignDoc[]>>
   designGetDoc: (id: string) => Promise<DbResult<DesignDoc | undefined>>
   designSaveDoc: (doc: DesignDoc) => Promise<DbResult<DesignDoc>>
   designDeleteDoc: (id: string) => Promise<DbResult<boolean>>
   designGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
   designCancel: (docId: string) => Promise<{ success: boolean; error?: string }>
-  
+
   // 数据清除操作
   dataClearMarket: () => Promise<{ success: boolean; error?: string }>
   dataClearAnalysis: () => Promise<{ success: boolean; error?: string }>
   dataClearPrototype: () => Promise<{ success: boolean; error?: string }>
   dataClearDesign: () => Promise<{ success: boolean; error?: string }>
+
+  // 应用配置
+  appGetConfigPath: () => Promise<DbResult<string>>
+  appOpenConfigFolder: () => Promise<DbResult<boolean>>
+
+  // 应用配置 (config.json)
+  configGet: () => Promise<DbResult<any>>
+  configSave: (settings: any) => Promise<DbResult<any>>
+  configGetPath: () => Promise<DbResult<string>>
 }
 
 declare global {
@@ -226,4 +236,4 @@ declare global {
   }
 }
 
-export {}
+export { }

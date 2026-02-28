@@ -4,6 +4,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { resolve } from 'path'
+import { builtinModules } from 'module'
 
 // 是否在 Electron 环境中运行（electron:dev 脚本会设置该变量）
 const isElectron = process.env.ELECTRON === 'true'
@@ -33,7 +34,17 @@ async function getPlugins() {
           vite: {
             build: {
               outDir: 'dist-electron',
-              rollupOptions: { external: ['electron', 'electron-store'] }
+              rollupOptions: {
+                external: [
+                  'electron',
+                  'electron-store',
+                  'better-sqlite3',
+                  'cheerio',
+                  'undici',
+                  ...builtinModules,
+                  ...builtinModules.map(m => `node:${m}`)
+                ]
+              }
             }
           }
         },
@@ -43,7 +54,13 @@ async function getPlugins() {
           vite: {
             build: {
               outDir: 'dist-electron',
-              rollupOptions: { external: ['electron'] }
+              rollupOptions: {
+                external: [
+                  'electron',
+                  ...builtinModules,
+                  ...builtinModules.map(m => `node:${m}`)
+                ]
+              }
             }
           }
         }

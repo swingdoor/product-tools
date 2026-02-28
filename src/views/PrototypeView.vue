@@ -137,7 +137,7 @@ const prototypeStore = useProductPrototypeStore()
 const settingsStore = useSettingsStore()
 
 // 当前项目
-const currentProject = computed(() => prototypeStore.currentProject)
+const currentProject = computed(() => prototypeStore.currentTask)
 
 // 视图状态
 const currentPageIdx = ref(0)
@@ -175,10 +175,10 @@ watch(currentPage, (page) => {
 // 初始化
 onMounted(() => {
   const projectId = route.params.id as string
-  if (projectId && !prototypeStore.currentProject) {
-    const project = prototypeStore.getProjectById(projectId)
+  if (projectId && !prototypeStore.currentTask) {
+    const project = prototypeStore.getTaskById(projectId)
     if (project) {
-      prototypeStore.setCurrentProject(project)
+      prototypeStore.currentTask = project
     }
   }
 })
@@ -276,7 +276,8 @@ async function regeneratePage() {
         payload: { customPrompt: editablePrompt.value },
         apiKey: settingsStore.settings.apiKey,
         baseUrl: settingsStore.settings.baseUrl,
-        model: settingsStore.settings.model
+        model: settingsStore.settings.model,
+        systemPrompt: settingsStore.settings.prompts?.['prototype-page']
       })
     })
 

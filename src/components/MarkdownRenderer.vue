@@ -57,6 +57,7 @@
       ref="contentRef"
       class="markdown-body md-content"
       v-html="renderedHtml"
+      @click="handleContentClick"
     />
   </div>
 </template>
@@ -242,6 +243,24 @@ function handlePrint() {
     w.document.close()
     w.print()
     w.close()
+  }
+}
+
+// ── 链接点击拦截 ──────────────────────────────────────────
+function handleContentClick(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  const link = target.closest('a')
+  if (link && link.href) {
+    const url = link.href
+    // 如果是外部链接（http 开头且非 file 开头）
+    if (url.startsWith('http')) {
+      event.preventDefault()
+      if (window.electronAPI) {
+        window.electronAPI.openExternal(url)
+      } else {
+        window.open(url, '_blank')
+      }
+    }
   }
 }
 </script>
