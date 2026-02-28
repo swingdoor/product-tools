@@ -81,6 +81,34 @@ export default defineConfig(async () => ({
   server: {
     port: 5173
   },
+  optimizeDeps: {
+    include: [
+      'element-plus/es',
+      'element-plus/es/components/progress/style/css',
+      'element-plus/es/components/scrollbar/style/css',
+      'element-plus/es/components/button/style/css',
+      'element-plus/es/components/dialog/style/css',
+      'element-plus/es/components/table/style/css',
+      'element-plus/es/components/tag/style/css',
+      'element-plus/es/components/input/style/css',
+      'element-plus/es/components/select/style/css',
+      'element-plus/es/components/option/style/css',
+      'element-plus/es/components/tooltip/style/css',
+      'element-plus/es/components/popconfirm/style/css',
+      'element-plus/es/components/form/style/css',
+      'element-plus/es/components/form-item/style/css',
+      'element-plus/es/components/switch/style/css',
+      'element-plus/es/components/checkbox/style/css',
+      'element-plus/es/components/checkbox-group/style/css',
+      'element-plus/es/components/loading/style/css',
+      'element-plus/es/components/alert/style/css',
+      'element-plus/es/components/tabs/style/css',
+      'element-plus/es/components/tab-pane/style/css',
+      'element-plus/es/components/dropdown/style/css',
+      'element-plus/es/components/dropdown-item/style/css',
+      'element-plus/es/components/dropdown-menu/style/css'
+    ]
+  },
   // 浏览器预览时将 window.electronAPI 模拟为 undefined，避免报错
   define: isElectron ? {} : {}
 }))

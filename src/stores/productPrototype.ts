@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
+import { projectApi } from '@/api/projectApi'
 import type {
   TaskStatus,
   TaskLogType,
@@ -38,7 +39,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
     if (!isElectron()) return
     loading.value = true
     try {
-      const result = await window.electronAPI.dbGetProjects()
+      const result = await projectApi.getProjects()
       if (result.success && result.data) {
         tasks.value = result.data
       }
@@ -54,7 +55,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
     if (!isElectron()) return null
     loading.value = true
     try {
-      const result = await window.electronAPI.dbGetProject(id)
+      const result = await projectApi.getProject(id)
       if (result.success && result.data) {
         currentTask.value = result.data
         // 同时更新列表中的任务
@@ -76,7 +77,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   async function loadTaskLogs(taskId: string) {
     if (!isElectron()) return
     try {
-      const result = await window.electronAPI.dbGetLogs(taskId)
+      const result = await projectApi.getLogs(taskId)
       if (result.success && result.data) {
         currentTaskLogs.value = result.data
       }
@@ -89,7 +90,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   async function saveTaskToDB(task: PrototypeProject) {
     if (!isElectron()) return task
     try {
-      const result = await window.electronAPI.dbSaveProject(JSON.parse(JSON.stringify(task)))
+      const result = await projectApi.saveProject(JSON.parse(JSON.stringify(task)))
       if (result.success && result.data) {
         return result.data
       }
@@ -103,7 +104,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
   async function deleteTaskFromDB(id: string) {
     if (!isElectron()) return false
     try {
-      const result = await window.electronAPI.dbDeleteProject(id)
+      const result = await projectApi.deleteProject(id)
       return result.success
     } catch (err) {
       console.error('删除任务失败:', err)
@@ -123,7 +124,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
 
     if (isElectron()) {
       try {
-        const result = await window.electronAPI.dbAddLog(JSON.parse(JSON.stringify(logInput)))
+        const result = await projectApi.addLog(JSON.parse(JSON.stringify(logInput)))
         if (result.success && result.data) {
           // 添加到当前日志列表的开头
           currentTaskLogs.value.unshift(result.data)
@@ -179,7 +180,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
     if (isElectron()) {
       try {
         const cleanProgress = progress ? JSON.parse(JSON.stringify(progress)) : undefined
-        const result = await window.electronAPI.dbUpdateStatusProgress(id, status, cleanProgress, errorMessage)
+        const result = await projectApi.updateStatusProgress(id, status, cleanProgress, errorMessage)
         if (result.success && result.data) {
           // 更新本地状态
           const idx = tasks.value.findIndex(p => p.id === id)
@@ -229,7 +230,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
     prompts?: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> {
     const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await window.electronAPI.taskStartGenerate(projectId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await projectApi.startGenerate(projectId, apiKey, baseUrl, model, cleanPrompts)
     if (result.success) {
       await loadTask(projectId)
     }
@@ -238,7 +239,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
 
   /** 取消生成任务 */
   async function cancelTask(projectId: string): Promise<{ success: boolean; error?: string }> {
-    const result = await window.electronAPI.taskCancel(projectId)
+    const result = await projectApi.cancelGenerate(projectId)
     if (result.success) {
       await loadTask(projectId)
     }
@@ -255,7 +256,7 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
 
     if (isElectron()) {
       try {
-        const result = await window.electronAPI.dbUpdateProgress(id, JSON.parse(JSON.stringify(progressWithHeartbeat)))
+        const result = await projectApi.updateProgress(id, JSON.parse(JSON.stringify(progressWithHeartbeat)))
         if (result.success && result.data) {
           // 更新本地状态
           const idx = tasks.value.findIndex(p => p.id === id)

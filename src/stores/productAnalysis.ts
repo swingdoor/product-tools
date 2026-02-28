@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { analysisApi } from '@/api/analysisApi'
 import type { AnalysisTask, TaskLog, TaskStatus } from '@/electron.d'
 
 export type { AnalysisTask, TaskLog, TaskStatus }
@@ -22,7 +23,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   async function loadTasks() {
     loading.value = true
     try {
-      const result = await window.electronAPI.analysisGetTasks()
+      const result = await analysisApi.getTasks()
       if (result.success && result.data) {
         tasks.value = result.data
       }
@@ -35,7 +36,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
 
   /** 加载单个任务 */
   async function loadTask(id: string) {
-    const result = await window.electronAPI.analysisGetTask(id)
+    const result = await analysisApi.getTask(id)
     if (result.success && result.data) {
       currentTask.value = result.data
       // 同步更新 tasks 列表中的对应任务
@@ -51,7 +52,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
 
   /** 加载任务日志 */
   async function loadTaskLogs(taskId: string) {
-    const result = await window.electronAPI.analysisGetLogs(taskId)
+    const result = await analysisApi.getLogs(taskId)
     if (result.success && result.data) {
       currentTaskLogs.value = result.data
     }
@@ -76,7 +77,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
       updatedAt: now
     }
 
-    const result = await window.electronAPI.analysisSaveTask(JSON.parse(JSON.stringify(newTask)))
+    const result = await analysisApi.saveTask(JSON.parse(JSON.stringify(newTask)))
     if (result.success && result.data) {
       tasks.value.unshift(result.data)
       return result.data
@@ -87,7 +88,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
   /** 更新任务 */
   async function updateTask(task: AnalysisTask): Promise<boolean> {
     task.updatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
-    const result = await window.electronAPI.analysisSaveTask(JSON.parse(JSON.stringify(task)))
+    const result = await analysisApi.saveTask(JSON.parse(JSON.stringify(task)))
     if (result.success && result.data) {
       const idx = tasks.value.findIndex(t => t.id === task.id)
       if (idx !== -1) {
@@ -103,7 +104,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
 
   /** 删除任务 */
   async function deleteTask(id: string): Promise<boolean> {
-    const result = await window.electronAPI.analysisDeleteTask(id)
+    const result = await analysisApi.deleteTask(id)
     if (result.success) {
       tasks.value = tasks.value.filter(t => t.id !== id)
       if (currentTask.value?.id === id) {
@@ -123,7 +124,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
     prompts?: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> {
     const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await window.electronAPI.analysisStart(taskId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await analysisApi.start(taskId, apiKey, baseUrl, model, cleanPrompts)
     if (result.success) {
       // 刷新任务状态
       await loadTask(taskId)
@@ -133,7 +134,7 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
 
   /** 取消分析任务 */
   async function cancelTask(taskId: string): Promise<boolean> {
-    const result = await window.electronAPI.analysisCancel(taskId)
+    const result = await analysisApi.cancel(taskId)
     if (result.success) {
       await loadTask(taskId)
       return true

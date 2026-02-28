@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { designDocApi } from '@/api/designDocApi'
 import type { DesignDoc, TaskLog, TaskStatus, PrototypeProject } from '@/electron.d'
 
 export type { DesignDoc, TaskLog, TaskStatus }
@@ -22,7 +23,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
   async function loadTasks() {
     loading.value = true
     try {
-      const result = await window.electronAPI.designGetDocs()
+      const result = await designDocApi.getDocs()
       if (result.success && result.data) {
         tasks.value = result.data
       }
@@ -35,7 +36,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
 
   /** 加载单个任务 */
   async function loadDoc(id: string) {
-    const result = await window.electronAPI.designGetDoc(id)
+    const result = await designDocApi.getDoc(id)
     if (result.success && result.data) {
       currentTask.value = result.data
       // 同步更新 tasks 列表中的对应文档
@@ -51,7 +52,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
 
   /** 加载任务日志 */
   async function loadTaskLogs(docId: string) {
-    const result = await window.electronAPI.designGetLogs(docId)
+    const result = await designDocApi.getLogs(docId)
     if (result.success && result.data) {
       currentTaskLogs.value = result.data
     }
@@ -78,10 +79,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
     }
 
     try {
-      if (!window.electronAPI) {
-        throw new Error('window.electronAPI is not defined.')
-      }
-      const result = await window.electronAPI.designSaveDoc(JSON.parse(JSON.stringify(newTask)))
+      const result = await designDocApi.saveDoc(JSON.parse(JSON.stringify(newTask)))
       if (result.success && result.data) {
         tasks.value.unshift(result.data)
         return { task: result.data }
@@ -110,7 +108,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
       progress: task.progress ? { ...task.progress } : undefined
     }
 
-    const result = await window.electronAPI.designSaveDoc(JSON.parse(JSON.stringify(plainDoc)))
+    const result = await designDocApi.saveDoc(JSON.parse(JSON.stringify(plainDoc)))
     if (result.success && result.data) {
       const idx = tasks.value.findIndex(d => d.id === task.id)
       if (idx !== -1) {
@@ -126,7 +124,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
 
   /** 删除任务 */
   async function deleteTask(id: string): Promise<boolean> {
-    const result = await window.electronAPI.designDeleteDoc(id)
+    const result = await designDocApi.deleteDoc(id)
     if (result.success) {
       tasks.value = tasks.value.filter(d => d.id !== id)
       if (currentTask.value?.id === id) {
@@ -146,7 +144,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
     prompts?: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> {
     const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await window.electronAPI.designStart(docId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await designDocApi.start(docId, apiKey, baseUrl, model, cleanPrompts)
     if (result.success) {
       // 刷新文档状态
       await loadDoc(docId)
@@ -156,7 +154,7 @@ export const useDesignDocStore = defineStore('designDoc', () => {
 
   /** 取消生成任务 */
   async function cancelTask(docId: string): Promise<boolean> {
-    const result = await window.electronAPI.designCancel(docId)
+    const result = await designDocApi.cancel(docId)
     if (result.success) {
       await loadDoc(docId)
       return true

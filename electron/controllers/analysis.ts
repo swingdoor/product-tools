@@ -1,4 +1,5 @@
-import { updateAnalysisTaskStatus, updateAnalysisTaskHeartbeat, addLog } from '../store'
+import { analysisService } from '../services/analysisService'
+import { systemRepo } from '../db/repositories/systemRepo'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from '../services/taskRunner'
 import { logger } from '../logger'
 
@@ -15,7 +16,7 @@ export async function executeAnalysisTask(
     const moduleName = 'ProductAnalysis'
     logger.info(moduleName, '开始执行分析任务', `ID: ${taskId}`)
     try {
-        addLog({ taskId, type: 'generate_step', message: '正在分析产品需求...', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId, type: 'generate_step', message: '正在分析产品需求...', timestamp: new Date().toISOString() })
 
         // 调用 AI 分析
         const result = await callAnalysisAIWithHeartbeat(
@@ -25,21 +26,21 @@ export async function executeAnalysisTask(
         if (taskState.cancelled) return
 
         // 保存结果
-        updateAnalysisTaskStatus(taskId, 'completed', {
+        analysisService.updateStatus(taskId, 'completed', {
             resultContent: result,
             progress: { lastHeartbeat: new Date().toISOString() }
         })
 
-        addLog({ taskId, type: 'status_change', message: '状态变更: → 已完成', timestamp: new Date().toISOString() })
-        addLog({ taskId, type: 'generate_done', message: '分析完成', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId, type: 'status_change', message: '状态变更: → 已完成', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId, type: 'generate_done', message: '分析完成', timestamp: new Date().toISOString() })
         logger.info(moduleName, '分析任务完成', `ID: ${taskId}`)
 
     } catch (err) {
         if (taskState.cancelled) return
         const errMsg = err instanceof Error ? err.message : '分析失败，请重试'
-        updateAnalysisTaskStatus(taskId, 'failed', { errorMessage: errMsg })
-        addLog({ taskId, type: 'status_change', message: '状态变更: → 失败', timestamp: new Date().toISOString() })
-        addLog({ taskId, type: 'error', message: `分析失败: ${errMsg}`, timestamp: new Date().toISOString() })
+        analysisService.updateStatus(taskId, 'failed', { errorMessage: errMsg })
+        systemRepo.addLog({ taskId, type: 'status_change', message: '状态变更: → 失败', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId, type: 'error', message: `分析失败: ${errMsg}`, timestamp: new Date().toISOString() })
         logger.error(moduleName, `分析任务失败: ${errMsg}`, `ID: ${taskId}`)
     }
 }
@@ -69,7 +70,7 @@ ${inputContent}
     // 启动心跳定时器
     const heartbeatTimer = setInterval(() => {
         if (!taskState.cancelled) {
-            updateAnalysisTaskHeartbeat(taskId)
+            analysisService.updateHeartbeat(taskId)
         }
     }, HEARTBEAT_INTERVAL_MS)
 

@@ -1,4 +1,8 @@
-import { getProjects, updateProjectStatusAndProgress, addLog, getMarketReports, getAnalysisTasks, getDesignDocs, updateMarketReportStatus, updateAnalysisTaskStatus, updateDesignDocStatus } from '../store'
+import { projectService } from './projectService'
+import { marketService } from './marketService'
+import { analysisService } from './analysisService'
+import { designDocService } from './designDocService'
+import { systemRepo } from '../db/repositories/systemRepo'
 import { logger } from '../logger'
 
 // 心跳间隔（5秒）
@@ -31,7 +35,7 @@ export class TaskManager {
     }
 
     private checkAllTasksHeartbeat() {
-        const projects = getProjects()
+        const projects = projectService.getAll()
         const generatingProjects = projects.filter(p => p.status === 'generating')
 
         for (const project of generatingProjects) {
@@ -55,7 +59,7 @@ export class TaskManager {
         }
 
         // 检查市场报告
-        const marketReports = getMarketReports()
+        const marketReports = marketService.getAll()
         const generatingMarketReports = marketReports.filter(p => p.status === 'generating')
         for (const report of generatingMarketReports) {
             const taskState = this.runningTasks.get(report.id)
@@ -74,7 +78,7 @@ export class TaskManager {
         }
 
         // 检查分析任务
-        const analysisTasks = getAnalysisTasks()
+        const analysisTasks = analysisService.getAll()
         const generatingAnalysisTasks = analysisTasks.filter(p => p.status === 'generating')
         for (const task of generatingAnalysisTasks) {
             const taskState = this.runningTasks.get(task.id)
@@ -93,7 +97,7 @@ export class TaskManager {
         }
 
         // 检查设计文档
-        const designDocs = getDesignDocs()
+        const designDocs = designDocService.getAll()
         const generatingDesignDocs = designDocs.filter(p => p.status === 'generating')
         for (const doc of generatingDesignDocs) {
             const taskState = this.runningTasks.get(doc.id)
@@ -115,15 +119,15 @@ export class TaskManager {
     private markTaskAsFailed(projectId: string, type: 'prototype' | 'market' | 'analysis' | 'design', reason: string) {
         logger.warn('TaskManager', `任务超时: ${projectId} [${type}] | 原因: ${reason}`)
         if (type === 'prototype') {
-            updateProjectStatusAndProgress(projectId, 'failed', { step: 'error', errorMessage: reason }, reason)
+            projectService.updateStatusAndProgress(projectId, 'failed', { step: 'error', errorMessage: reason }, reason)
         } else if (type === 'market') {
-            updateMarketReportStatus(projectId, 'failed', { errorMessage: reason })
+            marketService.updateStatus(projectId, 'failed', { errorMessage: reason })
         } else if (type === 'analysis') {
-            updateAnalysisTaskStatus(projectId, 'failed', { errorMessage: reason })
+            analysisService.updateStatus(projectId, 'failed', { errorMessage: reason })
         } else if (type === 'design') {
-            updateDesignDocStatus(projectId, 'failed', { errorMessage: reason })
+            designDocService.updateStatus(projectId, 'failed', { errorMessage: reason })
         }
-        addLog({ taskId: projectId, type: 'error', message: reason, timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'error', message: reason, timestamp: new Date().toISOString() })
         this.runningTasks.delete(projectId)
     }
 

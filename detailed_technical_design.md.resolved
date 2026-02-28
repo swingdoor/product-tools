@@ -1,0 +1,120 @@
+# ProductTools 详细技术设计文档
+
+本文档详细描述了系统的技术实现，涵盖了从底层数据库到顶层 UI 的七层架构中各层的功能细节、核心函数、调用关系及数据库设计。
+
+---
+
+## 1. 数据库设计 (Database Schema)
+
+系统使用 SQLite (via `better-sqlite3`) 作为持久化存储。
+
+### 1.1 核心数据表
+
+| 表名 | 描述 | 关键字段 |
+| :--- | :--- | :--- |
+| `market_reports` | 市场洞察报告 | `id`, `title`, `industry`, `status`, `resultContent`, `progress` (JSON), `deepSearch` (Int/Bool) |
+| `analysis_tasks` | 需求分析任务 | `id`, `title`, `sourceReportId`, `inputContent`, `resultContent`, `status`, `progress` (JSON) |
+| `prototype_projects`| 原型生成项目 | `id`, `title`, `clientType`, `analysisContent`, `data` (JSON), `versions` (JSON), `status` |
+| `design_docs` | 设计文档 | `id`, `title`, `sourceProjectId`, `pageCount`, `resultContent`, `status` |
+| `task_logs` | 全局任务日志 | `id`, `taskId`, [type](file:///d:/code_project/product_tools3/src/stores/productPrototype.ts#320-327) (create/error/step...), `message`, `detail`, `timestamp` |
+| `app_settings` | 应用全局配置 | `key`, `value` (JSON string) |
+
+### 1.2 数据转换逻辑
+- **JSON 序列化**：复杂对象（如 `progress`, `focusAreas`, `data`）在存入数据库前通过 [toDB()](file:///d:/code_project/product_tools3/electron/db/connection.ts#97-100) 转换为字符串，读取时通过 [fromDB()](file:///d:/code_project/product_tools3/electron/db/connection.ts#101-109) 解析为对象。
+
+---
+
+## 2. 详细层级设计
+
+### 第一层：数据访问层 (Repository)
+*   **组件**：`marketRepo`, `projectRepo`, `analysisRepo`, `designDocRepo`, `systemRepo`
+*   **核心函数**：
+    - [getAll()](file:///d:/code_project/product_tools3/electron/services/marketService.ts#6-9): 获取所有记录并反序列化 JSON 字段。
+    - [getById(id)](file:///d:/code_project/product_tools3/electron/db/repositories/marketRepo.ts#15-25): 根据主键获取单条记录。
+    - [save(data)](file:///d:/code_project/product_tools3/electron/services/marketService.ts#14-27): 使用 `INSERT OR REPLACE` 实现新增或更新。
+    - [delete(id)](file:///d:/code_project/product_tools3/electron/db/repositories/projectRepo.ts#49-53): 删除记录。
+    - `getLogsByTaskId(taskId)`: (in `systemRepo`) 获取特定任务的所有日志。
+
+### 第二层：业务服务层 (Service)
+*   **逻辑说明**：负责处理纯业务逻辑，不涉及 IPC 或 UI。
+*   **核心组件与函数**：
+    - **MarketService**: [updateStatus](file:///d:/code_project/product_tools3/electron/services/marketService.ts#36-53), [updateHeartbeat](file:///d:/code_project/product_tools3/electron/services/marketService.ts#54-66) (更新任务心跳)。
+    - **ProjectService**: `updateStatusAndProgress` (更新原型生成的步骤和进度)。
+    - **AIService ([ai.ts](file:///d:/code_project/product_tools3/electron/services/ai.ts))**: `buildPrompt` (根据任务类型构建 Prompt), `callAIWithHeartbeat` (流式调用 AI 并自动更新数据库状态)。
+    - **TaskManager ([taskRunner.ts](file:///d:/code_project/product_tools3/electron/services/taskRunner.ts))**: `registerTask`, [cancelTask](file:///d:/code_project/product_tools3/src/stores/marketInsight.ts#161-170) (管理正在运行的高能耗 AI 任务)。
+
+### 第三层：控制层 (Controller)
+*   **职责**：作为 IPC 的目标函数，编排多个 Service 和 Repo。
+*   **核心函数示例**：
+    - [executeMarketTask](file:///d:/code_project/product_tools3/electron/controllers/market.ts#9-99): 这是一个 `async` 函数，它首先调用 `webSearch`（如果开启了联网搜索），然后将结果喂给 `callMarketAIWithHeartbeat` 进行最终生成，最后更新数据库为 `completed`。
+    - `executeGenerateTask`: 管理原型生成的两个阶段（页面规划、HTML生成）。
+
+### 第四层：IPC 接口层 (IPC & Preload)
+*   **IPC 映射 ([electron/ipc.ts](file:///d:/code_project/product_tools3/electron/ipc.ts))**：
+    - `'market:start'`: 触发 [executeMarketTask](file:///d:/code_project/product_tools3/electron/controllers/market.ts#9-99)。
+    - `'db:save-project'`: 触发 `projectService.save`。
+    - `'ai:call'`: 直接触发基础 AI 调用（非任务流）。
+*   **Preload ([preload.ts](file:///d:/code_project/product_tools3/electron/preload.ts))**：将 `ipcRenderer.invoke` 包装成 `window.electronAPI.xxx` 供前端使用。
+
+### 第五层：前端 API 桥接层 (Renderer API)
+*   **封装逻辑 ([src/api/client.ts](file:///d:/code_project/product_tools3/src/api/client.ts))**：统一处理 API 响应格式 `{ success: boolean; data?: T; error?: string }`。
+*   **组件示例**：
+    - `marketApi.start(...)`: 告知后端开始生成报告。
+    - `prototypeApi.getProject(id)`: 获取项目详情。
+
+### 第六层：状态管理层 (Pinia Store)
+*   **职责**：维护 UI 的响应式状态，封装异步 API 操作。
+*   **核心 Store**：
+    - `useMarketInsightStore`: [loadTasks](file:///d:/code_project/product_tools3/src/stores/productPrototype.ts#37-52), [createTask](file:///d:/code_project/product_tools3/src/stores/productPrototype.ts#151-177), [startTask](file:///d:/code_project/product_tools3/src/stores/marketInsight.ts#143-160) (调用 API 并更新 `tasks` 数组)。
+    - `useProductPrototypeStore`: 专门管理复杂的生成状态 `isGenerating`、`genProgress`。
+
+### 第七层：UI 组件层 (Vue Components)
+*   **组件关系**：
+    - **List 页面** ([PrototypeList.vue](file:///d:/code_project/product_tools3/src/views/PrototypeList.vue) 等): 负责展示表格、搜索、删除。
+    - **Generate 页面** ([PrototypeGenerate.vue](file:///d:/code_project/product_tools3/src/views/PrototypeGenerate.vue)): 负责展示生成进度条、轮询任务状态、实时任务日志。
+    - **View 页面**: 展示生成的 Markdown 报告或原型 HTML 预览。
+
+---
+
+## 3. 核心调用链示例 (以“联网搜索+生成报告”为例)
+
+```mermaid
+sequenceDiagram
+    participant UI as Vue (MarketList)
+    participant Store as Pinia (marketInsight)
+    participant API as Renderer API (marketApi)
+    participant Main as Main Process (ipc.ts)
+    participant CTL as Controller (market.ts)
+    participant Search as Service (webSearch)
+    participant AI as Service (ai.ts)
+    participant DB as SQLite (marketRepo)
+
+    UI->>Store: handleCreate()
+    Store->>API: startTask(reportId)
+    API->>Main: invoke('market:start')
+    Main->>CTL: executeMarketTask()
+    
+    rect rgb(240, 240, 240)
+    Note over CTL, Search: 第一阶段: 联网检索
+    CTL->>Search: webSearch(keywords)
+    Search-->>CTL: researchResults
+    end
+
+    rect rgb(230, 245, 230)
+    Note over CTL, AI: 第二阶段: AI 生成
+    CTL->>AI: callMarketAIWithHeartbeat()
+    AI->>DB: updateStatus('completed')
+    end
+
+    Main-->>API: { success: true }
+    API-->>Store: result
+    Store-->>UI: ElMessage.success
+```
+
+---
+
+## 4. 其它技术细节
+
+1.  **心跳机制**：由于 AI 生成可能长达数分钟，`Service` 会在生成过程中不断调用 [updateHeartbeat](file:///d:/code_project/product_tools3/electron/services/marketService.ts#54-66)，更新 `updatedAt` 和 `lastHeartbeat` 字段，配合前端轮询防止 UI 显示为“死掉”的任务。
+2.  **错误处理**：后端 `Controller` 使用 `try-catch` 包裹，一旦捕获到 API 错误或逻辑错误，立即将数据库状态改为 `failed` 并记录 `errorMessage`。前端通过 `watch` 状态变更进行弹窗提醒。
+3.  **并发管理**：`taskManager` 使用一个 `Map<string, TaskState>` 存储正在运行的任务，支持用户在中途点击“取消”，通过 `AbortController` 或取消标志位中断后续 AI 调用。

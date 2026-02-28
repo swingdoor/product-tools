@@ -1,7 +1,9 @@
-import { saveDesignDoc, updateDesignDocStatus, updateDesignDocProgress, addLog, getDesignDocById, getProjectById } from '../store'
+import { designDocService } from '../services/designDocService'
+import { systemRepo } from '../db/repositories/systemRepo'
 import { generatePageDesignWithHeartbeat } from '../services/ai'
 import type { TaskState } from '../services/taskRunner'
-import type { DesignDoc, PrototypeProject } from '../store'
+import type { DesignDoc } from '../../src/electron.d'
+import type { PrototypeProject } from '../../src/electron.d'
 import { logger } from '../logger'
 
 /** 执行设计文档生成任务 */
@@ -30,7 +32,7 @@ export async function executeDesignDocTask(
             const percentage = Math.round((i / totalPages) * 100)
 
             // 更新进度
-            updateDesignDocProgress(docId, {
+            designDocService.updateProgress(docId, {
                 totalPages,
                 currentPage,
                 currentPageName: page.name,
@@ -38,7 +40,7 @@ export async function executeDesignDocTask(
                 lastHeartbeat: new Date().toISOString()
             })
 
-            addLog({
+            systemRepo.addLog({
                 taskId: docId,
                 type: 'generate_step',
                 message: `正在生成页面 ${currentPage}/${totalPages}: ${page.name}`,
@@ -61,7 +63,7 @@ export async function executeDesignDocTask(
         if (taskState.cancelled) return
 
         // 保存结果
-        updateDesignDocStatus(docId, 'completed', {
+        designDocService.updateStatus(docId, 'completed', {
             resultContent,
             progress: {
                 totalPages,
@@ -72,14 +74,14 @@ export async function executeDesignDocTask(
             }
         })
 
-        addLog({ taskId: docId, type: 'generate_done', message: '设计文档生成完成', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: docId, type: 'generate_done', message: '设计文档生成完成', timestamp: new Date().toISOString() })
         logger.info(moduleName, `设计文档任务完成 | ID: ${docId}`)
 
     } catch (err) {
         if (taskState.cancelled) return
         const errMsg = err instanceof Error ? err.message : '生成失败，请重试'
-        updateDesignDocStatus(docId, 'failed', { errorMessage: errMsg })
-        addLog({ taskId: docId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
+        designDocService.updateStatus(docId, 'failed', { errorMessage: errMsg })
+        systemRepo.addLog({ taskId: docId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
         logger.error(moduleName, `设计文档生成失败: ${errMsg} | ID: ${docId}`)
     }
 }

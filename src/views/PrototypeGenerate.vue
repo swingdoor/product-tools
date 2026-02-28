@@ -305,9 +305,14 @@ onMounted(async () => {
     if (currentProject.value?.status === 'generating') {
       startPolling()
     }
+
+    // 如果任务已经完成且没有明确的生成指令，直接跳转到查看页
+    if (currentProject.value?.status === 'completed' && !route.query.action) {
+      router.push({ name: 'PrototypeView', params: { id: projectId } })
+    }
   }
 
-  // 如果路由带有生成动作，自动开始生成（不再检查 status === 'pending'，以便重新提交）
+  // 如果路由带有生成动作，自动开始生成
   if (route.query.action === 'generate') {
     startGenerate()
   }

@@ -29,6 +29,7 @@
         style="width: 100%"
         row-key="id"
         class="task-table"
+        @row-click="handleRowClick"
       >
 
 
@@ -64,7 +65,7 @@
                 v-if="row.status === 'pending'"
                 type="primary"
                 size="small"
-                @click="goToGeneratePage(row, true)"
+                @click.stop="goToGenerate(row.id, 'generate')"
               >
                 提交生成
               </el-button>
@@ -75,7 +76,7 @@
                 type="primary"
                 size="small"
                 plain
-                @click="goToGeneratePage(row, true)"
+                @click.stop="goToGenerate(row.id, 'generate')"
               >
                 重新提交
               </el-button>
@@ -86,7 +87,7 @@
                 type="success"
                 size="small"
                 plain
-                @click="goToViewPage(row)"
+                @click.stop="goToView(row.id)"
               >
                 查看
               </el-button>
@@ -97,20 +98,30 @@
                 type="warning"
                 size="small"
                 plain
-                @click="goToGeneratePage(row)"
+                @click.stop="goToGenerate(row.id)"
               >
                 查看生成
               </el-button>
 
+              <!-- 取消按钮 -->
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                plain
+                @click.stop="handleCancel(row)"
+              >取消</el-button>
+
               <!-- 删除按钮 -->
               <el-popconfirm
-                :title="row.status === 'generating' ? '删除后将取消生成任务，确定？' : '确定删除此任务？'"
+                v-if="row.status !== 'generating'"
+                title="确定删除此任务？"
                 confirm-button-text="删除"
                 cancel-button-text="取消"
                 @confirm="deleteTask(row)"
               >
                 <template #reference>
-                  <el-button type="danger" size="small" plain>删除</el-button>
+                  <el-button type="danger" size="small" plain @click.stop>删除</el-button>
                 </template>
               </el-popconfirm>
             </div>
@@ -178,20 +189,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
+import { Plus, Loading } from '@element-plus/icons-vue'
 import { useProductPrototypeStore, type PrototypeProject, type TaskStatus } from '@/stores/productPrototype'
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
+import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
 const prototypeStore = useProductPrototypeStore()
 const analysisStore = useProductAnalysisStore()
+const settingsStore = useSettingsStore()
+
+// 轮询定时器
+let pollTimer: ReturnType<typeof setInterval> | null = null
+const POLL_INTERVAL = 3000
+
+// 轮询
+function startPolling() {
+  if (pollTimer) return
+  pollTimer = setInterval(async () => {
+    if (prototypeStore.generatingCount > 0) {
+      await prototypeStore.loadTasks()
+    }
+  }, POLL_INTERVAL)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
 
 // 初始化时从数据库加载项目
 onMounted(async () => {
   await prototypeStore.loadTasks()
   await analysisStore.loadTasks() // 加载分析任务以供选择
+  if (prototypeStore.generatingCount > 0) {
+    startPolling()
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 // 新建弹窗
@@ -289,24 +331,16 @@ async function handleCreateAndGenerate() {
     showCreateDialog.value = false
     resetForm()
     ElMessage.success('任务创建成功，开始生成...')
+    
+    // 重置后跳转到生成页
     router.push({ name: 'PrototypeGenerate', params: { id: project.id }, query: { action: 'generate' } })
   }
 }
 
-// 进入生成页
-function goToGeneratePage(project: PrototypeProject, autoGenerate = false) {
-  prototypeStore.currentTask = project
-  if (autoGenerate) {
-    router.push({ name: 'PrototypeGenerate', params: { id: project.id }, query: { action: 'generate' } })
-  } else {
-    router.push({ name: 'PrototypeGenerate', params: { id: project.id } })
-  }
-}
-
-// 进入查看页
-function goToViewPage(project: PrototypeProject) {
-  prototypeStore.currentTask = project
-  router.push({ name: 'PrototypeView', params: { id: project.id } })
+// 取消任务
+async function handleCancel(task: PrototypeProject) {
+  await prototypeStore.cancelTask(task.id)
+  ElMessage.info('已取消生成')
 }
 
 // 删除任务
@@ -316,6 +350,39 @@ async function deleteTask(project: PrototypeProject) {
   }
   await prototypeStore.deleteTask(project.id)
   ElMessage.success('已删除')
+}
+
+// 行点击
+function handleRowClick(row: PrototypeProject) {
+  if (row.status === 'completed') {
+    goToView(row.id)
+  } else if (row.status === 'generating') {
+    goToGenerate(row.id)
+  }
+}
+
+// 带错误捕获的路由跳转
+function goToGenerate(id: string, action?: string) {
+  const query = action ? { action } : undefined
+  router.push({ name: 'PrototypeGenerate', params: { id }, query }).catch(err => {
+    ElNotification.error({
+      title: '页面跳转失败',
+      message: String(err.message || err),
+      duration: 0
+    })
+    console.error('Router push failed:', err)
+  })
+}
+
+function goToView(id: string) {
+  router.push({ name: 'PrototypeView', params: { id } }).catch(err => {
+    ElNotification.error({
+      title: '页面跳转失败',
+      message: String(err.message || err),
+      duration: 0
+    })
+    console.error('Router push failed:', err)
+  })
 }
 </script>
 

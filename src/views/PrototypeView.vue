@@ -8,8 +8,10 @@
           返回列表
         </el-button>
         <el-divider direction="vertical" />
-        <span class="project-title">{{ currentProject?.title || '任务结果' }}</span>
-        <el-tag size="small" type="success" effect="plain">已完成</el-tag>
+        <span class="project-title">{{ currentProject?.title || '任务查看' }}</span>
+        <el-tag v-if="currentProject && !prototypeStore.loading" size="small" :type="getStatusType()" effect="plain">
+          {{ getStatusText() }}
+        </el-tag>
       </div>
       <div class="header-right">
         <el-tooltip content="导出" placement="bottom">
@@ -29,7 +31,13 @@
     </header>
 
     <!-- 主体内容 -->
-    <main class="page-content" v-if="currentProject?.status === 'completed' && currentProject?.data">
+    <main class="page-content" v-if="prototypeStore.loading">
+      <div class="loading-state">
+        <el-icon class="rotating" size="48" color="#165DFF"><Loading /></el-icon>
+        <p>正在加载任务数据...</p>
+      </div>
+    </main>
+    <main class="page-content" v-else-if="currentProject?.status === 'completed' && currentProject?.data?.pages">
       <!-- 任务基础信息 -->
       <div class="task-info-bar">
         <span class="info-item">
@@ -117,8 +125,10 @@
 
     <!-- 无效状态 -->
     <main v-else class="page-content invalid-state">
-      <el-empty description="该任务尚未完成，请前往生成页">
-        <el-button type="primary" @click="goToGeneratePage">进入生成页</el-button>
+      <el-empty :description="currentProject?.status === 'generating' ? '任务生成中，请在生成页查看进度' : '该任务尚未完成，请前往生成页'">
+        <el-button type="primary" @click="goToGeneratePage">
+          {{ currentProject?.status === 'generating' ? '查看生成进度' : '进入生成页' }}
+        </el-button>
       </el-empty>
     </main>
   </div>
@@ -128,7 +138,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
-import { useProductPrototypeStore } from '@/stores/productPrototype'
+import { useProductPrototypeStore, type TaskStatus } from '@/stores/productPrototype'
 import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
@@ -172,14 +182,35 @@ watch(currentPage, (page) => {
   }
 }, { immediate: true })
 
+// 状态映射
+function getStatusType(): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  const status = currentProject.value?.status
+  const map: Record<TaskStatus, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = { 
+    pending: 'info', 
+    generating: 'warning', 
+    completed: 'success', 
+    failed: 'danger' 
+  }
+  return map[status || 'pending'] || 'info'
+}
+
+function getStatusText(): string {
+  const status = currentProject.value?.status
+  const map: Record<TaskStatus, string> = { 
+    pending: '待提交', 
+    generating: '执行中', 
+    completed: '已完成', 
+    failed: '失败' 
+  }
+  return map[status || 'pending'] || '未知'
+}
+
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   const projectId = route.params.id as string
-  if (projectId && !prototypeStore.currentTask) {
-    const project = prototypeStore.getTaskById(projectId)
-    if (project) {
-      prototypeStore.currentTask = project
-    }
+  if (projectId) {
+    // 始终加载最新数据，确保状态同步
+    await prototypeStore.loadTask(projectId)
   }
 })
 
@@ -433,6 +464,25 @@ async function regeneratePage() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.loading-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.rotating {
+  animation: rotating 2s linear infinite;
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* 右侧预览区 */

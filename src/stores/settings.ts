@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { settingsApi } from '@/api/settingsApi'
 
 
 /** 搜索数据源 ID */
@@ -181,7 +182,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function init() {
     if (!window.electronAPI) return
 
-    const result = await window.electronAPI.configGet()
+    const result = await settingsApi.getConfig()
     if (result.success && result.data) {
       const backendSettings = result.data
       // 如果后端有 API Key，说明已经配置过，覆盖前端
@@ -193,7 +194,7 @@ export const useSettingsStore = defineStore('settings', () => {
         }
       } else {
         // 后端为空，将前端 localStorage 里的内容同步到后端
-        await window.electronAPI.configSave(JSON.parse(JSON.stringify(settings.value)))
+        await settingsApi.saveConfig(JSON.parse(JSON.stringify(settings.value)))
       }
     }
   }
@@ -206,7 +207,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 同步到后端 config.json
     if (window.electronAPI) {
-      await window.electronAPI.configSave(JSON.parse(JSON.stringify(settings.value)))
+      await settingsApi.saveConfig(JSON.parse(JSON.stringify(settings.value)))
     }
   }
 

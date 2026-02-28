@@ -1,4 +1,5 @@
-import { getProjectById, saveProject, updateProjectStatusAndProgress, updateProjectProgress, addLog } from '../store'
+import { projectService } from '../services/projectService'
+import { systemRepo } from '../db/repositories/systemRepo'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from '../services/taskRunner'
 import { buildPrompt, getCanvasInfoByClientType, AIType } from '../services/ai'
 import { logger } from '../logger'
@@ -18,7 +19,7 @@ export async function executeGenerateTask(
     logger.info(moduleName, `开始执行生成任务 | ID: ${projectId}`)
     try {
         // 第一步：规划页面
-        addLog({ taskId: projectId, type: 'generate_step', message: '步骤1：正在规划页面架构...', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: '步骤1：正在规划页面架构...', timestamp: new Date().toISOString() })
         const planRaw = await callAIWithHeartbeat(
             'prototype-plan',
             { analysisContent, clientType },
@@ -36,13 +37,13 @@ export async function executeGenerateTask(
         const { appName, pages: plannedPages } = planData
 
         // 更新进度
-        updateProjectProgress(projectId, {
+        projectService.updateProgress(projectId, {
             step: 'pages',
             totalPages: plannedPages.length,
             currentPage: 0,
             lastHeartbeat: new Date().toISOString()
         })
-        addLog({ taskId: projectId, type: 'generate_step', message: `页面规划完成，共 ${plannedPages.length} 个页面`, detail: plannedPages.map(p => p.name).join('、'), timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: `页面规划完成，共 ${plannedPages.length} 个页面`, detail: plannedPages.map(p => p.name).join('、'), timestamp: new Date().toISOString() })
 
         // 第二步：逐页生成 HTML
         const generatedPages: Array<{ id: string; name: string; description: string; prompt: string; htmlContent: string }> = []
@@ -54,12 +55,12 @@ export async function executeGenerateTask(
             const page = plannedPages[i]
 
             // 更新当前生成进度
-            updateProjectProgress(projectId, {
+            projectService.updateProgress(projectId, {
                 currentPage: i + 1,
                 currentPageName: page.name,
                 lastHeartbeat: new Date().toISOString()
             })
-            addLog({ taskId: projectId, type: 'generate_step', message: `步骤2：正在生成页面 ${i + 1}/${plannedPages.length}：${page.name}`, timestamp: new Date().toISOString() })
+            systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: `步骤2：正在生成页面 ${i + 1}/${plannedPages.length}：${page.name}`, timestamp: new Date().toISOString() })
 
             const htmlRaw = await callAIWithHeartbeat(
                 'prototype-page',
@@ -76,44 +77,49 @@ export async function executeGenerateTask(
             const htmlMatch = htmlRaw.match(/```html\s*([\s\S]*?)\s*```/)
             if (htmlMatch) htmlContent = htmlMatch[1]
 
+            const actualPrompt = buildPrompt(
+                'prototype-page',
+                { appName, page, clientType, pageIndex: i, totalPages: plannedPages.length }
+            )
+
             generatedPages.push({
                 id: page.id,
                 name: page.name,
                 description: page.description,
-                prompt: page.description,
+                prompt: actualPrompt,
                 htmlContent
             })
 
             completedPages.push({ id: page.id, name: page.name })
 
             // 更新已完成页面列表
-            updateProjectProgress(projectId, {
+            projectService.updateProgress(projectId, {
                 completedPages: [...completedPages],
                 lastHeartbeat: new Date().toISOString()
             })
-            addLog({ taskId: projectId, type: 'generate_step', message: `页面「${page.name}」生成完成`, timestamp: new Date().toISOString() })
+            systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: `页面「${page.name}」生成完成`, timestamp: new Date().toISOString() })
         }
 
         // 保存结果
-        const project = getProjectById(projectId)
+        const project = projectService.getById(projectId)
         if (project) {
             project.data = { appName, clientType, pages: generatedPages }
             project.status = 'completed'
             project.progress = { step: 'done', totalPages: generatedPages.length, currentPage: generatedPages.length, currentPageName: '', completedPages, lastHeartbeat: new Date().toISOString() }
             project.updatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
-            saveProject(project)
+            projectService.save(project)
         }
 
-        addLog({ taskId: projectId, type: 'status_change', message: '状态变更: → 已完成', timestamp: new Date().toISOString() })
-        addLog({ taskId: projectId, type: 'generate_done', message: `生成完成，共 ${generatedPages.length} 个页面`, timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'status_change', message: '状态变更: → 已完成', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'generate_done', message: `生成完成，共 ${generatedPages.length} 个页面`, timestamp: new Date().toISOString() })
         logger.info(moduleName, `原型生成任务完成 | ID: ${projectId}`)
 
     } catch (err) {
         if (taskState.cancelled) return
         const errMsg = err instanceof Error ? err.message : '生成失败，请重试'
-        updateProjectStatusAndProgress(projectId, 'failed', { step: 'error', errorMessage: errMsg }, errMsg)
-        addLog({ taskId: projectId, type: 'status_change', message: '状态变更: → 失败', timestamp: new Date().toISOString() })
-        addLog({ taskId: projectId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
+        projectService.updateStatusAndProgress(projectId, 'failed', { step: 'error', errorMessage: errMsg }, errMsg)
+        systemRepo.addLog({ taskId: projectId, type: 'status_change', message: '状态变更: → 失败', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: projectId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
         logger.error(moduleName, `生成任务失败: ${errMsg} | ID: ${projectId}`)
     }
 }
@@ -134,7 +140,7 @@ async function callAIWithHeartbeat(
     // 启动心跳定时器
     const heartbeatTimer = setInterval(() => {
         if (!taskState.cancelled) {
-            updateProjectProgress(projectId, { lastHeartbeat: new Date().toISOString() })
+            projectService.updateProgress(projectId, { lastHeartbeat: new Date().toISOString() })
         }
     }, HEARTBEAT_INTERVAL_MS)
 

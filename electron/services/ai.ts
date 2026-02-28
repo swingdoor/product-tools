@@ -1,4 +1,6 @@
-import { updateMarketReportHeartbeat, updateProjectProgress, updateDesignDocProgress } from '../store'
+import { marketService } from './marketService'
+import { projectService } from './projectService'
+import { designDocService } from './designDocService'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from './taskRunner'
 
 export type AIType = 'market-insight' | 'product-analysis' | 'prototype-plan' | 'prototype-page'
@@ -172,7 +174,7 @@ ${dataSourcesText}
 
   const heartbeatTimer = setInterval(() => {
     if (!taskState.cancelled) {
-      updateMarketReportHeartbeat(reportId)
+      marketService.updateHeartbeat(reportId)
     }
   }, HEARTBEAT_INTERVAL_MS)
 
@@ -252,7 +254,7 @@ export async function callAIWithHeartbeat(
 ): Promise<string> {
   const heartbeatTimer = setInterval(() => {
     if (!taskState.cancelled) {
-      updateProjectProgress(projectId, {
+      projectService.updateProgress(projectId, {
         lastHeartbeat: new Date().toISOString()
       })
     }
@@ -361,7 +363,7 @@ ${page.htmlContent}
 
   const heartbeatTimer = setInterval(() => {
     if (!taskState.cancelled) {
-      updateDesignDocProgress(docId, {
+      designDocService.updateProgress(docId, {
         lastHeartbeat: new Date().toISOString()
       })
     }

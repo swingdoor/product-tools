@@ -1,4 +1,6 @@
-import { updateMarketReportStatus, addLog, type MarketReport } from '../store'
+import { marketService } from '../services/marketService'
+import { systemRepo } from '../db/repositories/systemRepo'
+import { MarketReport } from '../../src/electron.d'
 import { callMarketAIWithHeartbeat } from '../services/ai'
 import type { TaskState } from '../services/taskRunner'
 import { webSearch, type WebSearchConfig } from '../services/webSearch'
@@ -25,7 +27,7 @@ export async function executeMarketTask(
         if (report.deepSearch && report.industry && searchConfig?.enabled) {
             const sourceList = (searchConfig.sources || ['bing_cn']).join(', ')
             logger.info(moduleName, '启动 Deep Research...', `Sources: ${sourceList}`)
-            addLog({ taskId: reportId, type: 'generate_step', message: `🚀 启动 Deep Research：正在从 [${sourceList}] 检索实时信息...`, timestamp: new Date().toISOString() })
+            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: `🚀 启动 Deep Research：正在从 [${sourceList}] 检索实时信息...`, timestamp: new Date().toISOString() })
 
             const keywords = [report.industry, ...(report.focusAreas || [])].slice(0, 3).join(' ')
 
@@ -35,7 +37,7 @@ export async function executeMarketTask(
                 baseUrl,
                 model,
                 onLog: (msg: string) => {
-                    addLog({ taskId: reportId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() })
+                    systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() })
                 }
             }
 
@@ -43,17 +45,17 @@ export async function executeMarketTask(
 
             if (researchData) {
                 logger.info(moduleName, 'Deep Research 完成', '已获取实时搜索信息')
-                addLog({ taskId: reportId, type: 'generate_step', message: '✅ Deep Research 完成：已获取最新行业动态与趋势', detail: '已将检索到的摘要融入分析上下文', timestamp: new Date().toISOString() })
+                systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '✅ Deep Research 完成：已获取最新行业动态与趋势', detail: '已将检索到的摘要融入分析上下文', timestamp: new Date().toISOString() })
             } else {
                 logger.warn(moduleName, 'Deep Research 未能获取到信息')
-                addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ Deep Research 未能获取到额外信息，将使用大模型内置知识', timestamp: new Date().toISOString() })
+                systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ Deep Research 未能获取到额外信息，将使用大模型内置知识', timestamp: new Date().toISOString() })
             }
         } else if (report.deepSearch && !searchConfig?.enabled) {
             logger.warn(moduleName, 'Deep Research 开启但未配置数据源')
-            addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ 已勾选"联网搜索"但未在设置中启用任何数据源，将使用大模型内置知识', timestamp: new Date().toISOString() })
+            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ 已勾选"联网搜索"但未在设置中启用任何数据源，将使用大模型内置知识', timestamp: new Date().toISOString() })
         } else {
             logger.info(moduleName, '使用 AI 直接分析市场...')
-            addLog({ taskId: reportId, type: 'generate_step', message: '正在根据现有资料进行市场分析...', timestamp: new Date().toISOString() })
+            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '正在根据现有资料进行市场分析...', timestamp: new Date().toISOString() })
         }
 
         if (taskState.cancelled) {
@@ -78,19 +80,19 @@ export async function executeMarketTask(
         if (taskState.cancelled) return
 
         // 保存结果
-        updateMarketReportStatus(reportId, 'completed', {
+        marketService.updateStatus(reportId, 'completed', {
             resultContent: result,
             progress: { lastHeartbeat: new Date().toISOString() }
         })
 
-        addLog({ taskId: reportId, type: 'generate_done', message: '报告生成完成', timestamp: new Date().toISOString() })
+        systemRepo.addLog({ taskId: reportId, type: 'generate_done', message: '报告生成完成', timestamp: new Date().toISOString() })
         logger.info(moduleName, '报告生成成功', `ID: ${reportId}`)
 
     } catch (err) {
         if (taskState.cancelled) return
         const errMsg = err instanceof Error ? err.message : '生成失败，请重试'
-        updateMarketReportStatus(reportId, 'failed', { errorMessage: errMsg })
-        addLog({ taskId: reportId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
+        marketService.updateStatus(reportId, 'failed', { errorMessage: errMsg })
+        systemRepo.addLog({ taskId: reportId, type: 'error', message: `生成失败: ${errMsg}`, timestamp: new Date().toISOString() })
         logger.error(moduleName, `生成失败: ${errMsg}`, `ID: ${reportId}`)
     }
 }

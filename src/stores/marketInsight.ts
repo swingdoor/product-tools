@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { marketApi } from '@/api/marketApi'
 import type { MarketReport, TaskLog, TaskStatus } from '@/electron.d'
 
 export type { MarketReport, TaskLog, TaskStatus }
@@ -22,7 +23,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
   async function loadTasks() {
     loading.value = true
     try {
-      const result = await window.electronAPI.marketGetReports()
+      const result = await marketApi.getReports()
       if (result.success && result.data) {
         tasks.value = result.data
       }
@@ -35,7 +36,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
 
   /** 加载单个任务 */
   async function loadReport(id: string) {
-    const result = await window.electronAPI.marketGetReport(id)
+    const result = await marketApi.getReport(id)
     if (result.success && result.data) {
       currentTask.value = result.data
       // 同步更新 tasks 列表中的对应任务
@@ -51,7 +52,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
 
   /** 加载任务日志 */
   async function loadTaskLogs(reportId: string) {
-    const result = await window.electronAPI.marketGetLogs(reportId)
+    const result = await marketApi.getLogs(reportId)
     if (result.success && result.data) {
       currentTaskLogs.value = result.data
     }
@@ -82,10 +83,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
     }
 
     try {
-      if (!window.electronAPI) {
-        throw new Error('window.electronAPI is not defined.')
-      }
-      const result = await window.electronAPI.marketSaveReport(JSON.parse(JSON.stringify(newTask)))
+      const result = await marketApi.saveReport(JSON.parse(JSON.stringify(newTask)))
       if (result.success && result.data) {
         tasks.value.unshift(result.data)
         return { task: result.data }
@@ -115,7 +113,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
       progress: report.progress ? { ...report.progress } : undefined
     }
 
-    const result = await window.electronAPI.marketSaveReport(JSON.parse(JSON.stringify(plainReport)))
+    const result = await marketApi.saveReport(JSON.parse(JSON.stringify(plainReport)))
     if (result.success && result.data) {
       const idx = tasks.value.findIndex(r => r.id === report.id)
       if (idx !== -1) {
@@ -131,7 +129,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
 
   /** 删除任务 */
   async function deleteTask(id: string): Promise<boolean> {
-    const result = await window.electronAPI.marketDeleteReport(id)
+    const result = await marketApi.deleteReport(id)
     if (result.success) {
       tasks.value = tasks.value.filter(r => r.id !== id)
       if (currentTask.value?.id === id) {
@@ -153,7 +151,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
   ): Promise<{ success: boolean; error?: string }> {
     const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
     const cleanSearchConfig = searchConfig ? JSON.parse(JSON.stringify(searchConfig)) : undefined
-    const result = await window.electronAPI.marketStart(reportId, apiKey, baseUrl, model, cleanPrompts, cleanSearchConfig)
+    const result = await marketApi.start(reportId, apiKey, baseUrl, model, cleanPrompts, cleanSearchConfig)
     if (result.success) {
       await loadReport(reportId)
     }
@@ -162,7 +160,7 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
 
   /** 取消任务 */
   async function cancelTask(reportId: string): Promise<boolean> {
-    const result = await window.electronAPI.marketCancel(reportId)
+    const result = await marketApi.cancel(reportId)
     if (result.success) {
       await loadReport(reportId)
       return true
