@@ -10,7 +10,7 @@ async function buildElectron() {
     bundle: true,
     platform: 'node',
     target: 'node20',
-    external: ['electron', 'electron-store'],
+    external: ['electron', 'electron-store', 'better-sqlite3'],
     sourcemap: false,
     minify: false,
     format: 'cjs',
