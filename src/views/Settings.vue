@@ -111,19 +111,30 @@
                   <div class="field-hint">开启后，在创建市场洞察报告时勾选「联网搜索」，系统将从网页获取实时信息。</div>
                 </el-form-item>
 
-                <el-form-item v-if="form.searchConfig.enabled" label="数据源（多选）">
+                <el-form-item v-if="form.searchConfig.enabled" label="数据源">
                   <div class="source-grid">
                     <el-checkbox-group v-model="form.searchConfig.sources">
-                      <div v-for="src in searchSources" :key="src.id" class="source-item">
-                        <el-checkbox :value="src.id">
+                      <div class="source-item">
+                        <el-checkbox value="bocha_api" disabled checked>
                           <div class="source-label">
-                            <span class="source-name">{{ src.label }}</span>
-                            <span class="source-desc">{{ src.desc }}</span>
+                            <span class="source-name">博查 Web Search API</span>
+                            <span class="source-desc">专为 AI Agent 和 RAG 设计的国内合规搜索 API</span>
                           </div>
                         </el-checkbox>
                       </div>
                     </el-checkbox-group>
                   </div>
+                </el-form-item>
+
+                <el-form-item v-if="form.searchConfig.enabled" label="博查 API Key" required>
+                  <el-input
+                    v-model="form.searchConfig.bochaApiKey"
+                    type="password"
+                    show-password
+                    placeholder="sk-..."
+                    clearable
+                  />
+                  <div class="field-hint">请前往 <a href="https://open.bochaai.com" target="_blank">open.bochaai.com</a> 申请获取 API Key</div>
                 </el-form-item>
 
                 <div class="form-actions">
@@ -277,7 +288,8 @@ const form = reactive({
   ...settingsStore.settings,
   searchConfig: {
     enabled: settingsStore.settings.searchConfig?.enabled ?? false,
-    sources: [...(settingsStore.settings.searchConfig?.sources || ['bing_cn'])]
+    sources: ['bocha_api'], // 强制使用 bocha_api
+    bochaApiKey: settingsStore.settings.searchConfig?.bochaApiKey || ''
   }
 })
 const saving = ref(false)
@@ -288,11 +300,7 @@ const realConfigPath = ref('')
 const configJsonStr = ref('')
 
 const searchSources = [
-  { id: 'bing_cn', label: '必应搜索', desc: '通用网页搜索，结果丰富（推荐首选）' },
-  { id: 'baidu',   label: '百度搜索', desc: '国内主流搜索引擎' },
-  { id: 'xinhua',  label: '新华网',   desc: '官方权威新闻与政策信息' },
-  { id: 'xueqiu',  label: '雪球',     desc: '股票、基金、财经资讯' },
-  { id: 'c36kr',   label: '36氪',     desc: '科技创业与投资资讯' },
+  { id: 'bocha_api', label: '博查 Web Search API', desc: '专为 AI Agent 和 RAG 设计的国内合规搜索 API' }
 ]
 
 const promptLabels: Record<string, string> = {
@@ -321,7 +329,7 @@ async function saveSettings() {
   // 模拟保存延迟
   await new Promise(resolve => setTimeout(resolve, 300))
   
-  await settingsStore.save({ ...form, searchConfig: { ...form.searchConfig } })
+  await settingsStore.save({ ...form, searchConfig: { ...form.searchConfig, sources: form.searchConfig.sources as any } })
   await refreshConfigJson() // 保存后刷新 JSON 预览
   
   saving.value = false

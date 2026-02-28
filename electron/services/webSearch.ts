@@ -1,28 +1,29 @@
 /**
- * webSearch.ts — 多源联网搜索服务（国内可访问数据源）
+ * webSearch.ts — 联网搜索服务 (Deep Research)
  *
- * 支持的数据源：
- *   - bing_cn  : 必应中国（通用搜索，默认推荐）
- *   - baidu    : 百度搜索（通用搜索）
- *   - xinhua   : 新华网（政策/新闻）
- *   - xueqiu   : 雪球（金融/股市信息）
- *   - c36kr    : 36氪（科技/创投）
+ * 目前主力由 博查 Web Search API 提供支持
+ * (专为 AI Agent 和 RAG 设计的高质量搜索方案)
  */
 
-import * as cheerio from 'cheerio'
 import { logger } from '../logger'
 
 // ============================================================
 // 类型定义
 // ============================================================
 
-/** 可选的搜索数据源 */
-export type SearchSourceId = 'bing_cn' | 'baidu' | 'xinhua' | 'xueqiu' | 'c36kr'
+export type SearchSourceId = 'bocha_api' | 'bing_cn' | 'baidu' | 'xinhua' | 'xueqiu' | 'c36kr'
 
 /** 联网搜索配置 */
 export interface WebSearchConfig {
     enabled: boolean
     sources: SearchSourceId[]
+    bochaApiKey?: string
+    // 用于多轮提问扩展阶段的大模型凭证
+    apiKey?: string
+    baseUrl?: string
+    model?: string
+    // 用于向 UI 推送详细日志
+    onLog?: (msg: string) => void
 }
 
 /** 单条搜索结果 */
@@ -30,265 +31,249 @@ export interface SearchResult {
     title: string
     url: string
     snippet: string
-    source: string  // 来源名称，如"必应"
+    source: string  // 来源名称
 }
 
-/** 数据源描述 */
-export const SEARCH_SOURCE_META: Record<SearchSourceId, { label: string; domain: string; desc: string }> = {
-    bing_cn: { label: '必应搜索', domain: 'cn.bing.com', desc: '通用网页搜索，结果丰富（推荐）' },
-    baidu: { label: '百度搜索', domain: 'www.baidu.com', desc: '国内最大搜索引擎' },
-    xinhua: { label: '新华网', domain: 'so.news.cn', desc: '官方权威新闻与政策信息' },
-    xueqiu: { label: '雪球', domain: 'xueqiu.com', desc: '股票、基金、财经资讯' },
-    c36kr: { label: '36氪', domain: '36kr.com', desc: '科技创业与投资资讯' }
-}
-
-// ============================================================
-// 公共工具函数
-// ============================================================
-
-const DEFAULT_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.5',
-    'Connection': 'keep-alive',
-}
-
-async function fetchHtml(url: string, extraHeaders: Record<string, string> = {}): Promise<string> {
-    const resp = await fetch(url, {
-        headers: { ...DEFAULT_HEADERS, ...extraHeaders },
-        // @ts-ignore — Electron Node 支持 signal，但 TS 类型可能不含 dispatcher
-        signal: AbortSignal.timeout(8000)
-    })
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`)
-    const buf = await resp.arrayBuffer()
-    // 先尝试 utf-8，百度部分接口返回 gbk
-    return new TextDecoder('utf-8').decode(buf)
-}
-
-function clean(text: string): string {
-    return text.replace(/\s+/g, ' ').trim()
-}
-
-// ============================================================
-// 必应中国（cn.bing.com）爬取器
-// 结构稳定，结果质量高，强烈推荐
-// ============================================================
-async function scrapeBingCN(keyword: string): Promise<SearchResult[]> {
-    const url = `https://cn.bing.com/search?q=${encodeURIComponent(keyword)}&cc=CN&setlang=zh-hans`
-    const html = await fetchHtml(url, { Referer: 'https://cn.bing.com/' })
-    const $ = cheerio.load(html)
-    const results: SearchResult[] = []
-
-    $('li.b_algo').each((_i, el) => {
-        if (results.length >= 5) return false
-        const titleEl = $(el).find('h2 a')
-        const title = clean(titleEl.text())
-        const href = titleEl.attr('href') || ''
-        const snippet = clean($(el).find('.b_caption p, .b_paractl').first().text())
-        if (title && href.startsWith('http') && snippet) {
-            results.push({ title, url: href, snippet, source: '必应搜索' })
+/** 博查 API 响应结构 (关键字段) */
+interface BochaApiResponse {
+    code: number
+    msg: string
+    data?: {
+        webPages?: {
+            value?: Array<{
+                id: string
+                name: string
+                url: string
+                snippet: string
+                siteName?: string
+                summary?: string // 长文本摘要
+            }>
         }
-    })
-
-    return results
-}
-
-// ============================================================
-// 百度搜索（www.baidu.com）爬取器
-// ============================================================
-async function scrapeBaidu(keyword: string): Promise<SearchResult[]> {
-    const url = `https://www.baidu.com/s?wd=${encodeURIComponent(keyword)}&ie=utf-8&rn=10`
-    const html = await fetchHtml(url, { Referer: 'https://www.baidu.com/' })
-    const $ = cheerio.load(html)
-    const results: SearchResult[] = []
-
-    // 百度结果在 data-click 属性或 h3.t > a 中
-    $('div.result, div.result-op').each((_i, el) => {
-        if (results.length >= 5) return false
-        const titleEl = $(el).find('h3.t a, h3 a').first()
-        const title = clean(titleEl.text())
-        // 百度的 href 是重定向链接，尝试提取 data-log 或直接使用
-        let href = titleEl.attr('href') || ''
-        // 有时候真实 URL 在 data-log 中，这里直接使用跳转链接
-        const snippet = clean($(el).find('div.c-abstract, .c-span9 .c-color-text, .c-row .c-span-last').first().text())
-        if (title && href && snippet) {
-            // 百度 href 是 /link?url=XXX 格式，保留原始跳转链接使用
-            if (!href.startsWith('http')) href = 'https://www.baidu.com' + href
-            results.push({ title, url: href, snippet, source: '百度搜索' })
-        }
-    })
-
-    return results
-}
-
-// ============================================================
-// 新华网搜索（so.news.cn）爬取器
-// ============================================================
-async function scrapeXinhua(keyword: string): Promise<SearchResult[]> {
-    // 新华网搜索有 JSON API 接口
-    const url = `https://so.news.cn/getNews?keyword=${encodeURIComponent(keyword)}&lang=cn&curPage=1&searchFields=1&sortField=0`
-    try {
-        const resp = await fetch(url, {
-            headers: { ...DEFAULT_HEADERS, Referer: 'https://so.news.cn/' },
-            signal: AbortSignal.timeout(8000)
-        })
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const json = await resp.json()
-        const items: any[] = json?.content?.results || []
-        return items.slice(0, 5).map(item => ({
-            title: clean(item.title?.replace(/<[^>]+>/g, '') || ''),
-            url: item.url || '',
-            snippet: clean(item.summary?.replace(/<[^>]+>/g, '') || ''),
-            source: '新华网'
-        })).filter(r => r.title && r.url)
-    } catch (err) {
-        // 如果 API 失败，尝试爬取首页搜索结果
-        logger.warn('WebSearch', `新华网 API 失败，跳过: ${err instanceof Error ? err.message : String(err)}`)
-        return []
     }
 }
 
 // ============================================================
-// 雪球（xueqiu.com）爬取器——金融信息
+// 博查 Web Search API 集成
 // ============================================================
-async function scrapeXueqiu(keyword: string): Promise<SearchResult[]> {
-    // 雪球有搜索 API
-    const url = `https://xueqiu.com/query/v1/search/general?q=${encodeURIComponent(keyword)}&count=5&source=user,news,post`
+
+/**
+ * 调用博查 API 执行搜索
+ */
+async function fetchBochaSearch(keyword: string, apiKey: string): Promise<SearchResult[]> {
+    if (!apiKey) {
+        throw new Error('未配置博查 API Key')
+    }
+
+    const url = 'https://api.bochaai.com/v1/web-search'
+
+    // 构造博查 API 请求体
+    // https://open.bochaai.com/docs/api-reference/web-search
+    const requestBody = {
+        query: keyword,
+        summary: true, // 开启长文本摘要，提供更丰富的上下文
+        count: 10,     // 每次搜索返回的结果数量
+        freshness: 'noLimit' // 时间范围：一天内、一周内、一个月内、一年内、不限
+    }
+
     try {
-        const resp = await fetch(url, {
+        const response = await fetch(url, {
+            method: 'POST',
             headers: {
-                ...DEFAULT_HEADERS,
-                Referer: 'https://xueqiu.com/',
-                Cookie: 'xq_a_token=dummy' // 部分接口需要 cookie 才不重定向
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                // 可以添加类似 User-Agent 等基础头信息
             },
-            signal: AbortSignal.timeout(8000)
+            body: JSON.stringify(requestBody),
+            // @ts-ignore
+            signal: AbortSignal.timeout(15000) // 给 API 充足的响应时间
         })
-        const json = await resp.json()
-        const items: any[] = json?.data?.query_result?.original?.items || []
-        return items.slice(0, 5).map((item: any) => ({
-            title: clean(item.title || item.text || ''),
-            url: item.target || `https://xueqiu.com${item.path || ''}`,
-            snippet: clean(item.description || item.text || '').slice(0, 200),
-            source: '雪球'
-        })).filter(r => r.title)
-    } catch (err) {
-        logger.warn('WebSearch', `雪球搜索失败，尝试 HTML 爬取: ${err instanceof Error ? err.message : String(err)}`)
-        // Fallback：爬取 HTML 页面
-        try {
-            const html = await fetchHtml(
-                `https://xueqiu.com/k?q=${encodeURIComponent(keyword)}`,
-                { Referer: 'https://xueqiu.com/' }
-            )
-            const $ = cheerio.load(html)
-            const results: SearchResult[] = []
-            $('.article-list .item, .timeline-item').each((_i, el) => {
-                if (results.length >= 5) return false
-                const titleEl = $(el).find('h2 a, .title a').first()
-                const title = clean(titleEl.text())
-                const href = titleEl.attr('href') || ''
-                const snippet = clean($(el).find('.description, .body').first().text()).slice(0, 200)
-                if (title && (href.startsWith('http') || href.startsWith('/'))) {
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`HTTP ${response.status}: ${errorText}`)
+        }
+
+        const data: BochaApiResponse = await response.json()
+
+        if (data.code !== 200) {
+            throw new Error(`API Error ${data.code}: ${data.msg}`)
+        }
+
+        const results: SearchResult[] = []
+        const pages = data.data?.webPages?.value || []
+
+        for (const page of pages) {
+            if (page.name && page.url) {
+                // 优先使用长文本摘要，如果不存在则使用短 snippet
+                const content = (page.summary || page.snippet || '').trim()
+                if (content) {
                     results.push({
-                        title,
-                        url: href.startsWith('/') ? 'https://xueqiu.com' + href : href,
-                        snippet: snippet || title,
-                        source: '雪球'
+                        title: page.name,
+                        url: page.url,
+                        snippet: content,
+                        source: page.siteName || '博查搜索'
                     })
                 }
-            })
-            return results
-        } catch {
-            return []
-        }
-    }
-}
-
-// ============================================================
-// 36氪（36kr.com）爬取器——科技/创投
-// ============================================================
-async function scrape36KR(keyword: string): Promise<SearchResult[]> {
-    const url = `https://36kr.com/search/articles/${encodeURIComponent(keyword)}`
-    try {
-        const html = await fetchHtml(url, { Referer: 'https://36kr.com/' })
-        const $ = cheerio.load(html)
-        const results: SearchResult[] = []
-
-        // 36kr 文章列表
-        $('a.article-item-title, .article-detail-title a, h3.title a').each((_i, el) => {
-            if (results.length >= 5) return false
-            const title = clean($(el).text())
-            const href = $(el).attr('href') || ''
-            if (title && href) {
-                results.push({
-                    title,
-                    url: href.startsWith('/') ? 'https://36kr.com' + href : href,
-                    snippet: '', // 36kr 列表页不显示摘要
-                    source: '36氪'
-                })
             }
-        })
+        }
 
         return results
     } catch (err) {
-        logger.warn('WebSearch', `36kr 爬取失败: ${err instanceof Error ? err.message : String(err)}`)
-        return []
+        logger.error('WebSearch', `博查 API 调用失败: ${err instanceof Error ? err.message : String(err)}`)
+        throw err
     }
 }
 
 // ============================================================
-// 主入口：多源并行搜索 + 去重合并
+// 大模型查询意图扩展
 // ============================================================
+
+/**
+ * 利用大模型将用户的主题关键词拆解为多个子维度的搜索关键词
+ */
+async function expandSearchQueries(keyword: string, config: WebSearchConfig): Promise<string[]> {
+    if (!config.apiKey || !config.baseUrl) {
+        logger.warn('WebSearch', '未传 AI 凭证，跳过关键字扩展，回退到主要关键字单次搜索')
+        return [keyword]
+    }
+
+    const systemPrompt = `你是一个专业的搜索提示词工程师（Prompt Engineer）。
+用户想要深度研究一个课题。请你将这个课题**横向拆解**为 3 个不同维度的独立搜索关键词（例如：市场规模与增长率、核心竞品分析、最新技术趋势等）。
+请务必返回一个合法的 JSON 数组，例如：["关键词1", "关键词2", "关键词3"]，不要包含任何其他文字或 markdown 解释。`
+
+    try {
+        logger.info('WebSearch', '正在请求 AI 进行搜索关键词扩展...', `Keyword=${keyword}`)
+        config.onLog?.('🧠 正在使用 AI 模型拆解与扩展搜索维度...')
+        const response = await fetch(`${config.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: config.model || 'deepseek-chat', // 使用普通模型即可，不需要 reasoning
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `课题：${keyword}` }
+                ],
+                temperature: 0.3,
+                response_format: { type: 'json_object' } // 部分模型支持强制 JSON
+            })
+        })
+
+        if (!response.ok) {
+            throw new Error(`AI Request Failed: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const content = data.choices?.[0]?.message?.content || '[]'
+
+        let queries: string[] = []
+        try {
+            // 尝试直接解析
+            const parsed = JSON.parse(content)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                queries = parsed
+            } else if (parsed.queries && Array.isArray(parsed.queries)) {
+                queries = parsed.queries
+            }
+        } catch (_) {
+            // 兜底提取数组串
+            const match = content.match(/\[(.*?)\]/s)
+            if (match) {
+                try {
+                    queries = JSON.parse(`[${match[1]}]`)
+                } catch { }
+            }
+        }
+
+        if (queries.length > 0) {
+            // 保留原始词，合并新产生的词（去重），最多留4个
+            const uniqueQueries = Array.from(new Set([keyword, ...queries])).slice(0, 4)
+            logger.info('WebSearch', '关键词扩展成功', `扩展后 keywords: [${uniqueQueries.join(', ')}]`)
+            if (uniqueQueries.length > 1) {
+                config.onLog?.(`✨ 挖掘到 ${uniqueQueries.length} 个独立检索维度: [${uniqueQueries.join('、')}]`)
+            }
+            return uniqueQueries
+        }
+    } catch (err) {
+        logger.warn('WebSearch', `关键词扩展失败: ${err instanceof Error ? err.message : String(err)}`)
+    }
+
+    // 发生任何异常，回退使用原始关键字
+    return [keyword]
+}
+
+// ============================================================
+// 主入口
+// ============================================================
+
 export async function webSearch(keyword: string, config: WebSearchConfig): Promise<string> {
-    if (!config.enabled || !config.sources || config.sources.length === 0) {
-        logger.info('WebSearch', '搜索已禁用或未配置数据源')
+    // 1. 检查配置是否开启
+    if (!config.enabled) {
+        logger.info('WebSearch', '联网搜索未开启')
         return ''
     }
 
-    logger.info('WebSearch', '开始并行搜索', `KeywordLen=${keyword.length}, Sources=[${config.sources.join(',')}]`)
-
-    // 并行调用所有配置的数据源
-    const scrapers: Record<SearchSourceId, (kw: string) => Promise<SearchResult[]>> = {
-        bing_cn: scrapeBingCN,
-        baidu: scrapeBaidu,
-        xinhua: scrapeXinhua,
-        xueqiu: scrapeXueqiu,
-        c36kr: scrape36KR,
+    // 2. 检查是否配置了 API Key
+    const apiKey = config.bochaApiKey?.trim()
+    if (!apiKey) {
+        logger.warn('WebSearch', '启用联网搜索但未配置 Bocha API Key')
+        // 返回一段特殊提示给大模型，让大模型知道搜索功能当前受限
+        return '[系统提示] 此任务尝试进行联网搜索，但用户未配置博查 API Key，搜索受限。请仅根据你现有的知识进行回答。'
     }
 
-    const tasks = config.sources.map(async (sourceId) => {
-        try {
-            const results = await scrapers[sourceId]?.(keyword) || []
-            logger.info('WebSearch', `${sourceId} 搜索完成 | 找到 ${results.length} 条结果`)
-            return results
-        } catch (err) {
-            logger.error('WebSearch', `${sourceId} 搜索失败: ${err instanceof Error ? err.message : String(err)}`)
-            return [] as SearchResult[]
-        }
-    })
+    logger.info('WebSearch', '开始 Deep Research (多维并发搜索)', `Keyword=${keyword}`)
+    config.onLog?.(`🔍 启动多维并发搜索 (主题: ${keyword})...`)
 
-    const allResultsNested = await Promise.allSettled(tasks)
-    const allResults: SearchResult[] = []
-    const seenUrls = new Set<string>()
+    try {
+        // 3. AI 辅助拆解/扩展查询词
+        const queries = await expandSearchQueries(keyword, config)
 
-    for (const r of allResultsNested) {
-        if (r.status === 'fulfilled') {
-            for (const item of r.value) {
-                if (!seenUrls.has(item.url) && item.title && item.url) {
-                    seenUrls.add(item.url)
-                    allResults.push(item)
+        // 4. 并发调用博查 API
+        const tasks = queries.map(q => fetchBochaSearch(q, apiKey))
+        const settledResults = await Promise.allSettled(tasks)
+
+        // 5. 汇总合并、URL去重
+        const allResults: SearchResult[] = []
+        const seenUrls = new Set<string>()
+
+        for (let i = 0; i < settledResults.length; i++) {
+            const res = settledResults[i]
+            if (res.status === 'fulfilled') {
+                for (const item of res.value) {
+                    if (!seenUrls.has(item.url)) {
+                        seenUrls.add(item.url)
+                        allResults.push(item)
+                    }
                 }
+            } else {
+                logger.warn('WebSearch', `子查询 [${queries[i]}] 失败: ${res.reason}`)
             }
         }
+
+        // 截取前 15 条最高相关度的结果 (多维度会产生很多结果)
+        const finalResults = allResults.slice(0, 15)
+        logger.info('WebSearch', 'Deep Research 合并完成', `共获取到 ${finalResults.length} 条独特结果信息。`)
+        config.onLog?.(`📥 检索完成：成功汇聚并去除了重复项，最终提取 ${finalResults.length} 条高价值文献摘要作为超级上下文。`)
+
+        if (finalResults.length === 0) {
+            config.onLog?.('⚠️ 抱歉，未能检索到任何相关信息。')
+            return `[系统提示] 对于主题 "${keyword}" 以及其衍生词，未找到相关的网络信息。`
+        }
+
+        // 6. 格式化为 AI 可读的引用列表结构
+        // 增加详细的 markdown 层级结构，让大模型更容易解析和引用
+        return finalResults.map((r, i) =>
+            `### 来源 [${i + 1}]: ${r.title}\n` +
+            `- **站点名称**: ${r.source}\n` +
+            `- **链接**: ${r.url}\n` +
+            `- **详细摘要/内容**:\n  ${r.snippet.replace(/\n/g, '\n  ')}`
+        ).join('\n\n---\n\n')
+
+    } catch (err) {
+        // 搜索失败时，记录错误但不让主流程中断
+        logger.error('WebSearch', '网络搜索过程发生严重异常', err instanceof Error ? err.stack : String(err))
+        return `[系统提示] 尝试获取最新网络信息失败 (${err instanceof Error ? err.message : '未知错误'})。请仅根据你现有的知识进行推演。`
     }
-
-    // 最多取前 8 条
-    const topResults = allResults.slice(0, 8)
-    logger.info('WebSearch', '搜索最终完成', `唯一结果数: ${topResults.length}`)
-
-    if (topResults.length === 0) return ''
-
-    // 格式化为 AI 可读的引用列表
-    return topResults.map((r, i) =>
-        `[${i + 1}] 标题: ${r.title}\n来源: ${r.source}\n链接: ${r.url}\n摘要: ${r.snippet || '（无摘要）'}`
-    ).join('\n\n---\n\n')
 }

@@ -3,12 +3,12 @@ import { ref, computed } from 'vue'
 
 
 /** 搜索数据源 ID */
-export type SearchSourceId = 'bing_cn' | 'baidu' | 'xinhua' | 'xueqiu' | 'c36kr'
+export type SearchSourceId = 'bocha_api' | 'bing_cn' | 'baidu' | 'xinhua' | 'xueqiu' | 'c36kr'
 
-/** 联网搜索配置 */
 export interface SearchConfig {
   enabled: boolean
   sources: SearchSourceId[]
+  bochaApiKey: string
 }
 
 /** AI 配置 */
@@ -30,7 +30,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 1. 结构化表达：必须使用专业的 Markdown 格式，层级清晰（使用 H1-H4）。
 2. 数据导向：在没有确切数据时，必须基于合理的商业常识进行逻辑推演与规模估算，并注明为“预估”。
 3. 深入腠理：拒绝泛泛而谈，必须直击行业痛点、核心壁垒和真实的商业模式。
-4. **引用溯源**（仅在有参考资料时）：如果系统提供了联网搜索的资料，你必须在关键结论、数据引用处通过 \`[序号](链接)\` 的格式进行标注，并在文末罗列《参考来源》。
+4. **引用溯源**（仅在有参考资料时）：如果系统提供了联网搜索的资料，你必须在关键结论、数据引用处以可点击的 Markdown 链接格式进行标注，格式如 \`[[序号]](链接)\`。并且你**必须**在文章最末尾的“参考来源”模块，以 \`[序号] [网页标题](链接)\` 的格式列出所有被引用的文章标题及对应链接。
 
 【报告结构要求】：
 - **执行摘要 (Executive Summary)**：一句话总结行业现状、核心变量与最大机遇。
@@ -39,7 +39,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 - **目标用户与真实痛点**：细分客群画像，他们尚未被满足的隐性需求与真实痛点（User Journey 分析）。
 - **技术变革与关键变量**：正在重塑该行业的新技术或政策变量，行业目前面临的最大结构性风险。
 - **破局点与战略建议**：如果我们要进入该领域，最犀利的切入点是什么？给出 3 条极具实操性的破局建议。
-- **参考来源 (References)**：罗列文中引用的所有外部链接，确保报告的可信度。
+- **参考来源 (References)**：罗列文中引用的所有外部链接，必须采用 \`[序号] [网页标题](网页原文链接)\` 的 Markdown 格式，确保点击标题即可打开关联网页。
 
 文风要求：客观、极简、务实、犀利，充满商业洞察力。`,
 
@@ -148,9 +148,11 @@ function loadFromStorage(): AISettings {
       }
       // 处理 searchConfig
       if (!data.searchConfig) {
-        data.searchConfig = { enabled: false, sources: ['bing_cn'] }
-      } else if ('provider' in data.searchConfig) {
-        data.searchConfig = { enabled: false, sources: ['bing_cn'] }
+        data.searchConfig = { enabled: false, sources: ['bing_cn'], bochaApiKey: '' }
+      } else {
+        if (!('bochaApiKey' in data.searchConfig)) {
+          data.searchConfig.bochaApiKey = ''
+        }
       }
       return data
     }
@@ -160,7 +162,7 @@ function loadFromStorage(): AISettings {
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-reasoner',
     prompts: { ...DEFAULT_PROMPTS },
-    searchConfig: { enabled: false, sources: ['bing_cn'] }
+    searchConfig: { enabled: false, sources: ['bing_cn'], bochaApiKey: '' }
   }
 }
 

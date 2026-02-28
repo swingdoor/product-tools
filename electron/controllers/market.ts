@@ -28,7 +28,18 @@ export async function executeMarketTask(
             addLog({ taskId: reportId, type: 'generate_step', message: `🚀 启动 Deep Research：正在从 [${sourceList}] 检索实时信息...`, timestamp: new Date().toISOString() })
 
             const keywords = [report.industry, ...(report.focusAreas || [])].slice(0, 3).join(' ')
-            researchData = await webSearch(keywords, searchConfig)
+
+            const finalSearchConfig: WebSearchConfig = {
+                ...searchConfig,
+                apiKey,
+                baseUrl,
+                model,
+                onLog: (msg: string) => {
+                    addLog({ taskId: reportId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() })
+                }
+            }
+
+            researchData = await webSearch(keywords, finalSearchConfig)
 
             if (researchData) {
                 logger.info(moduleName, 'Deep Research 完成', '已获取实时搜索信息')

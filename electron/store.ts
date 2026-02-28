@@ -255,7 +255,7 @@ export function getMarketReportById(id: string): MarketReport | undefined {
   }
 }
 
-export function saveMarketReport(report: MarketReport): MarketReport {
+export function saveMarketReport(report: MarketReport, skipLog: boolean = false): MarketReport {
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO market_reports (
       id, title, status, industry, targetUsers, focusAreas, dataSources, deepSearch, resultContent, createdAt, updatedAt, errorMessage, progress
@@ -276,7 +276,9 @@ export function saveMarketReport(report: MarketReport): MarketReport {
     report.errorMessage || null,
     toDB(report.progress)
   )
-  logger.info('Database', `保存市场报告: ${report.id}`, `Status: ${report.status}, ContentLen: ${report.resultContent?.length || 0}`)
+  if (!skipLog) {
+    logger.info('Database', `保存市场报告: ${report.id}`, `Status: ${report.status}, ContentLen: ${report.resultContent?.length || 0}`)
+  }
   return report
 }
 
@@ -317,7 +319,7 @@ export function updateMarketReportHeartbeat(id: string): MarketReport | null {
   }
   report.updatedAt = new Date().toISOString()
 
-  return saveMarketReport(report)
+  return saveMarketReport(report, true)
 }
 
 // ────────────────────────────────────────────────────────────
@@ -428,7 +430,7 @@ export function getProjectById(id: string): PrototypeProject | undefined {
   }
 }
 
-export function saveProject(project: PrototypeProject): PrototypeProject {
+export function saveProject(project: PrototypeProject, skipLog: boolean = false): PrototypeProject {
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO prototype_projects (
       id, title, status, clientType, sourceAnalysisId, analysisContent, data, versions, createdAt, updatedAt, errorMessage, progress
@@ -448,7 +450,9 @@ export function saveProject(project: PrototypeProject): PrototypeProject {
     project.errorMessage || null,
     toDB(project.progress)
   )
-  logger.info('Database', `保存原型项目: ${project.id}`, `Status: ${project.status}, Pages: ${project.data?.pages?.length || 0}`)
+  if (!skipLog) {
+    logger.info('Database', `保存原型项目: ${project.id}`, `Status: ${project.status}, Pages: ${project.data?.pages?.length || 0}`)
+  }
   return project
 }
 
@@ -476,7 +480,7 @@ export function updateProjectProgress(id: string, progress: Partial<GenerateProg
   }
   project.updatedAt = new Date().toISOString()
 
-  return saveProject(project)
+  return saveProject(project, true)
 }
 
 export function updateProjectStatusAndProgress(
@@ -690,6 +694,7 @@ interface ConfigSchema {
     searchConfig: {
       enabled: boolean
       sources: string[]
+      bochaApiKey: string
     }
   }
 }
@@ -699,7 +704,7 @@ const DEFAULT_SETTINGS: ConfigSchema['settings'] = {
   baseUrl: 'https://api.deepseek.com/v1',
   model: 'deepseek-reasoner',
   prompts: {},
-  searchConfig: { enabled: false, sources: ['bing_cn'] }
+  searchConfig: { enabled: false, sources: ['bing_cn'], bochaApiKey: '' }
 }
 
 /** 迁移电子商店数据到 SQLite */
