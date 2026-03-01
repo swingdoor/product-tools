@@ -205,7 +205,9 @@ class KnowledgeService {
     async searchDocuments(
         query: string,
         type: 'semantic' | 'keyword',
-        embeddingConfig?: { apiKey: string; baseUrl: string; model: string }
+        embeddingConfig?: { apiKey: string; baseUrl: string; model: string },
+        threshold: number = 0.3,
+        topK: number = 10
     ) {
         if (type === 'keyword') {
             return knowledgeRepo.searchDocs(query)
@@ -221,14 +223,19 @@ class KnowledgeService {
 
             const allVectors = knowledgeRepo.getAllVectors()
 
-            const scoredChunks = allVectors.map(v => ({
+            let scoredChunks = allVectors.map(v => ({
                 ...v,
                 score: cosineSimilarity(queryVector, v.vector)
             }))
 
+            // 过滤低于阈值的结果
+            if (threshold > 0) {
+                scoredChunks = scoredChunks.filter(c => c.score >= threshold)
+            }
+
             // 按相似度降序
             scoredChunks.sort((a, b) => b.score - a.score)
-            const topChunks = scoredChunks.slice(0, 10) // 取Top 10结果
+            const topChunks = scoredChunks.slice(0, topK) // 取Top K结果
 
             // 提取唯一的文档Id并查询对应文档
             const docIds = Array.from(new Set(topChunks.map(c => c.docId)))

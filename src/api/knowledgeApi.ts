@@ -16,6 +16,8 @@ export const knowledgeApi = {
         query: string
         type: 'semantic' | 'keyword'
         embeddingConfig?: { apiKey: string; baseUrl: string; model: string }
+        threshold?: number
+        topK?: number
     }) => invokeApi<any>(() => window.electronAPI.knowledgeSearchSemantic(params)),
     updateTags: (params: { docId: string; tags: string[] }) => invokeApi<void>(() => window.electronAPI.knowledgeUpdateTags(params)),
     openPdfWindow: (filePath: string) => invokeApi<void>(() => window.electronAPI.knowledgeOpenPdfWindow(filePath)),

@@ -195,6 +195,52 @@
               </el-form>
             </el-card>
           </el-tab-pane>
+
+          <!-- 3. 向量检索配置 -->
+          <el-tab-pane label="向量检索" name="vector" v-if="form.vectorSearch">
+            <el-card shadow="never" class="settings-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon color="#10A37F"><Operation /></el-icon>
+                  <span>向量检索配置 (Vector Search)</span>
+                </div>
+              </template>
+              <el-form :model="form" label-position="top" class="settings-form">
+                <el-form-item label="相似度阈值 (Threshold)">
+                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <el-input-number
+                      v-model="form.vectorSearch.threshold"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :precision="2"
+                      size="large"
+                      style="width: 180px;"
+                    />
+                    <el-tag border type="success">{{ (form.vectorSearch.threshold * 100).toFixed(0) }}%</el-tag>
+                  </div>
+                  <div class="field-hint">语义搜索时，低于该相似度的结果将被过滤。范围 0.0 - 1.0 (对应 0% - 100%)。建议设置在 0.3 - 0.5 之间。</div>
+                </el-form-item>
+                
+                <el-form-item label="检索数量限制 (TOP K)">
+                  <el-input-number
+                    v-model="form.vectorSearch.topK"
+                    :min="1"
+                    :max="50"
+                    size="large"
+                  />
+                  <div class="field-hint">每次语义搜索返回的最大匹配分块数量。默认 10。</div>
+                </el-form-item>
+
+                <div class="form-actions">
+                  <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
+                    <el-icon><Check /></el-icon> 保存向量配置
+                  </el-button>
+                </div>
+              </el-form>
+            </el-card>
+          </el-tab-pane>
+
           <el-tab-pane label="提示词配置" name="prompts">
             <el-card shadow="never" class="settings-card">
               <template #header>
@@ -392,7 +438,10 @@ const designDocStore = useDesignDocStore()
 const activeTab = ref('api')
 const activePromptTab = ref('market-insight')
 // 为了防止 form 深拷贝丢失响应式，先克隆一份
-const form = ref(JSON.parse(JSON.stringify(settingsStore.settings)))
+const form = ref({
+  ...JSON.parse(JSON.stringify(settingsStore.settings)),
+  vectorSearch: settingsStore.settings.vectorSearch || { threshold: 0.3, topK: 10 }
+})
 
 // 模型下拉列表（计算属性）
 const llmModelsList = computed(() => {
@@ -691,7 +740,10 @@ onMounted(async () => {
   // 初始化 settingsStore 同步 config.json
   await settingsStore.init()
   // 同步 form 内容
-  form.value = JSON.parse(JSON.stringify(settingsStore.settings))
+  form.value = {
+    ...JSON.parse(JSON.stringify(settingsStore.settings)),
+    vectorSearch: settingsStore.settings.vectorSearch || { threshold: 0.3, topK: 10 }
+  }
   
   // 加载路径信息
   const dbResult = await window.electronAPI.appGetConfigPath()

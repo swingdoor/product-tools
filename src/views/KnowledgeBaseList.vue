@@ -301,7 +301,9 @@ async function handleSearch() {
         apiKey: embeddingConfig.apiKey,
         baseUrl: embeddingConfig.baseUrl,
         model: embeddingConfig.model
-      }
+      },
+      threshold: settingsStore.settings.vectorSearch?.threshold,
+      topK: settingsStore.settings.vectorSearch?.topK
     })
     if (res.success && res.data) {
       semanticResults.value = res.data

@@ -93,9 +93,17 @@ export function registerKnowledgeHandlers() {
         query: string
         type: 'semantic' | 'keyword'
         embeddingConfig?: { apiKey: string; baseUrl: string; model: string }
+        threshold?: number
+        topK?: number
     }) => {
         try {
-            const results = await knowledgeService.searchDocuments(params.query, params.type, params.embeddingConfig)
+            const results = await knowledgeService.searchDocuments(
+                params.query,
+                params.type,
+                params.embeddingConfig,
+                params.threshold,
+                params.topK
+            )
             if (params.type === 'keyword') {
                 return { success: true, data: { docs: results, chunks: [] } }
             }

@@ -8,6 +8,11 @@ export interface SearchConfig {
   bochaApiKey: string
 }
 
+export interface VectorSearchConfig {
+  threshold: number // 0.0 - 1.0
+  topK: number // integer
+}
+
 export interface APIProvider {
   id: string
   name: string
@@ -30,6 +35,7 @@ export interface AISettings {
 
   prompts: Record<string, string>
   searchConfig: SearchConfig
+  vectorSearch: VectorSearchConfig
 }
 
 const STORAGE_KEY = 'pt_settings'
@@ -211,7 +217,11 @@ function loadFromStorage(): AISettings {
       }
       // 处理 searchConfig
       if (!data.searchConfig) {
-        data.searchConfig = { enabled: false, sources: ['bing_cn'], bochaApiKey: '' }
+        data.searchConfig = { enabled: false, bochaApiKey: '' }
+      }
+      // 处理 vectorSearch
+      if (!data.vectorSearch) {
+        data.vectorSearch = { threshold: 0.3, topK: 10 }
       }
 
       // 数据结构迁移逻辑
@@ -241,7 +251,8 @@ function loadFromStorage(): AISettings {
           activeEmbeddingProviderId: embeddingProvider.id,
           activeEmbeddingModel: data.embeddingConfig?.model || 'text-embedding-v3',
           prompts: data.prompts,
-          searchConfig: data.searchConfig
+          searchConfig: data.searchConfig,
+          vectorSearch: data.vectorSearch || { threshold: 0.3, topK: 10 }
         }
 
         // 删除旧字段
@@ -283,7 +294,8 @@ function loadFromStorage(): AISettings {
     activeEmbeddingProviderId: defaultProviderId,
     activeEmbeddingModel: 'text-embedding-v3',
     prompts: { ...DEFAULT_PROMPTS },
-    searchConfig: { enabled: false, bochaApiKey: '' }
+    searchConfig: { enabled: false, bochaApiKey: '' },
+    vectorSearch: { threshold: 0.3, topK: 10 }
   }
 }
 
@@ -335,7 +347,9 @@ export const useSettingsStore = defineStore('settings', () => {
         settings.value = {
           ...backendSettings,
           // 确保 prompts 完整
-          prompts: { ...DEFAULT_PROMPTS, ...backendSettings.prompts }
+          prompts: { ...DEFAULT_PROMPTS, ...backendSettings.prompts },
+          // 确保 vectorSearch 完整
+          vectorSearch: backendSettings.vectorSearch || { threshold: 0.3, topK: 10 }
         }
       } else {
         // 后端为空，将前端 localStorage 里的内容同步到后端
