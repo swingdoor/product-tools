@@ -1,33 +1,49 @@
 <template>
   <div class="app-container">
     <!-- 侧边栏 -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'is-collapsed': isCollapsed }">
       <div class="sidebar-logo">
         <div class="logo-icon">
           <el-icon size="24" color="#165DFF"><DataAnalysis /></el-icon>
         </div>
-        <span class="logo-text">ProductTools</span>
+        <span v-if="!isCollapsed" class="logo-text">ProductTools</span>
       </div>
 
       <nav class="sidebar-nav">
-        <router-link
+        <el-tooltip
           v-for="item in navItems"
           :key="item.path"
-          :to="item.path"
-          class="nav-item"
-          :class="{ active: currentPath === item.path }"
+          :content="item.label"
+          placement="right"
+          :disabled="!isCollapsed"
         >
-          <el-icon size="18"><component :is="item.icon" /></el-icon>
-          <span>{{ item.label }}</span>
-          <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
-        </router-link>
+          <router-link
+            :to="item.path"
+            class="nav-item"
+            :class="{ active: currentPath === item.path }"
+          >
+            <el-icon size="18"><component :is="item.icon" /></el-icon>
+            <span v-if="!isCollapsed">{{ item.label }}</span>
+            <span v-if="!isCollapsed && item.badge" class="nav-badge">{{ item.badge }}</span>
+          </router-link>
+        </el-tooltip>
       </nav>
 
       <div class="sidebar-footer">
-        <router-link to="/settings" class="nav-item" :class="{ active: currentPath === '/settings' }">
-          <el-icon size="18"><Setting /></el-icon>
-          <span>设置</span>
-        </router-link>
+        <el-tooltip content="设置" placement="right" :disabled="!isCollapsed">
+          <router-link to="/settings" class="nav-item" :class="{ active: currentPath === '/settings' }">
+            <el-icon size="18"><Setting /></el-icon>
+            <span v-if="!isCollapsed">设置</span>
+          </router-link>
+        </el-tooltip>
+        
+        <div class="collapse-toggle" @click="isCollapsed = !isCollapsed">
+          <el-icon size="18">
+            <Expand v-if="isCollapsed" />
+            <Fold v-else />
+          </el-icon>
+          <span v-if="!isCollapsed">收起菜单</span>
+        </div>
       </div>
     </aside>
 
@@ -74,13 +90,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 
 const route = useRoute()
 const router = useRouter()
 const settingsStore = useSettingsStore()
+const isCollapsed = ref(false)
 
 const navItems: { path: string; label: string; icon: string; tag: string | null; badge?: string }[] = [
   { path: '/market-insight', label: '市场洞察', icon: 'TrendCharts', tag: 'DeepResearch' },
@@ -110,25 +127,38 @@ const currentTag = computed(() => {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  --sidebar-width-expanded: 210px;
+  --sidebar-width-collapsed: 64px;
 }
 
 /* ── 侧边栏 ─────────────────────────────────────────────── */
 .sidebar {
-  width: var(--sidebar-width);
-  min-width: var(--sidebar-width);
+  width: var(--sidebar-width-expanded);
   background: var(--bg-white);
   border-right: 1px solid var(--border-split);
   display: flex;
   flex-direction: column;
-  z-index: 10;
+  z-index: 100;
+  transition: width 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
+  flex-shrink: 0;
+}
+
+.sidebar.is-collapsed {
+  width: var(--sidebar-width-collapsed);
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px;
-  cursor: default;
+  padding: 16px;
+  height: 64px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.sidebar.is-collapsed .sidebar-logo {
+  padding: 16px 0;
+  justify-content: center;
 }
 .logo-icon {
   width: 32px;
@@ -151,17 +181,22 @@ const currentTag = computed(() => {
 
 .sidebar-nav {
   flex: 1;
-  padding: 8px 16px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-x: hidden;
+}
+
+.sidebar.is-collapsed .sidebar-nav {
+  padding: 8px 8px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
@@ -169,6 +204,12 @@ const currentTag = computed(() => {
   transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
   position: relative;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.sidebar.is-collapsed .nav-item {
+  justify-content: center;
+  padding: 10px 0;
 }
 .nav-item:hover {
   color: var(--text-primary);
@@ -189,8 +230,37 @@ const currentTag = computed(() => {
 }
 
 .sidebar-footer {
-  padding: 16px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border-split);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar.is-collapsed .sidebar-footer {
+  padding: 8px 8px;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.collapse-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar.is-collapsed .collapse-toggle {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 /* ── 主内容区 ────────────────────────────────────────────── */

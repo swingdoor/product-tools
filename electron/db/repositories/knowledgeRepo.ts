@@ -60,6 +60,21 @@ class KnowledgeRepository {
         })
     }
 
+    deleteTagGlobally(tagToDelete: string) {
+        const allDocs = this.getAllDocs()
+        for (const doc of allDocs) {
+            try {
+                let tags: string[] = JSON.parse(doc.tags || '[]')
+                if (tags.includes(tagToDelete)) {
+                    tags = tags.filter(t => t !== tagToDelete)
+                    this.updateTags(doc.id, tags)
+                }
+            } catch (e) {
+                console.error(`Failed to parse tags for doc ${doc.id}`, e)
+            }
+        }
+    }
+
     // ── 向量表操作 ──
 
     insertVector(vectorInfo: Omit<KnowledgeVector, 'vector'> & { vector: number[] }) {

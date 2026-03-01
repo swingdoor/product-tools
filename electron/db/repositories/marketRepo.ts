@@ -6,6 +6,7 @@ export const marketRepo = {
         const rows = db.prepare('SELECT * FROM market_reports ORDER BY createdAt DESC').all() as any[]
         return rows.map(row => ({
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             deepSearch: !!row.deepSearch,
             focusAreas: fromDB<string[]>(row.focusAreas) || [],
             progress: fromDB<MarketProgress>(row.progress)
@@ -17,6 +18,7 @@ export const marketRepo = {
         if (!row) return undefined
         return {
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             deepSearch: !!row.deepSearch,
             focusAreas: fromDB<string[]>(row.focusAreas) || [],
             progress: fromDB<MarketProgress>(row.progress)
@@ -26,8 +28,8 @@ export const marketRepo = {
     save(report: MarketReport): MarketReport {
         const stmt = db.prepare(`
       INSERT OR REPLACE INTO market_reports (
-        id, title, status, industry, targetUsers, focusAreas, dataSources, deepSearch, resultContent, createdAt, updatedAt, errorMessage, progress
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, title, status, industry, targetUsers, focusAreas, dataSources, deepSearch, resultContent, knowledgeRefMode, knowledgeRefDocs, createdAt, updatedAt, errorMessage, progress
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
         stmt.run(
             report.id,
@@ -39,6 +41,8 @@ export const marketRepo = {
             report.dataSources,
             report.deepSearch ? 1 : 0,
             report.resultContent || null,
+            report.knowledgeRefMode || null,
+            toDB(report.knowledgeRefDocs),
             report.createdAt,
             report.updatedAt,
             report.errorMessage || null,

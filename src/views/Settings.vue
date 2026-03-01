@@ -197,7 +197,7 @@
           </el-tab-pane>
 
           <!-- 3. 向量检索配置 -->
-          <el-tab-pane label="向量检索" name="vector" v-if="form.vectorSearch">
+          <el-tab-pane label="向量检索" name="vector">
             <el-card shadow="never" class="settings-card">
               <template #header>
                 <div class="card-header">
@@ -206,10 +206,11 @@
                 </div>
               </template>
               <el-form :model="form" label-position="top" class="settings-form">
+                <el-divider content-position="left">文档检索配置 (用于知识库搜索)</el-divider>
                 <el-form-item label="相似度阈值 (Threshold)">
                   <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                     <el-input-number
-                      v-model="form.vectorSearch.threshold"
+                      v-model="form.vectorSearch.documentSearch.threshold"
                       :min="0"
                       :max="1"
                       :step="0.01"
@@ -217,22 +218,49 @@
                       size="large"
                       style="width: 180px;"
                     />
-                    <el-tag border type="success">{{ (form.vectorSearch.threshold * 100).toFixed(0) }}%</el-tag>
+                    <el-tag border type="success">{{ (form.vectorSearch.documentSearch.threshold * 100).toFixed(0) }}%</el-tag>
                   </div>
-                  <div class="field-hint">语义搜索时，低于该相似度的结果将被过滤。范围 0.0 - 1.0 (对应 0% - 100%)。建议设置在 0.3 - 0.5 之间。</div>
+                  <div class="field-hint">知识库进行语义搜索时，低于该相似度的结果将被过滤。范围 0.0 - 1.0。建议设置在 0.3 - 0.5 之间。</div>
                 </el-form-item>
                 
                 <el-form-item label="检索数量限制 (TOP K)">
                   <el-input-number
-                    v-model="form.vectorSearch.topK"
+                    v-model="form.vectorSearch.documentSearch.topK"
                     :min="1"
                     :max="50"
                     size="large"
                   />
-                  <div class="field-hint">每次语义搜索返回的最大匹配分块数量。默认 10。</div>
+                  <div class="field-hint">知识库页面语义搜索返回的最大匹配分块数量。默认 10。</div>
                 </el-form-item>
 
-                <div class="form-actions">
+                <el-divider content-position="left" style="margin-top: 30px;">分析任务配置 (用于生成报告时的自动检索)</el-divider>
+                <el-form-item label="相似度阈值 (Threshold)">
+                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <el-input-number
+                      v-model="form.vectorSearch.taskSearch.threshold"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :precision="2"
+                      size="large"
+                      style="width: 180px;"
+                    />
+                    <el-tag border type="success">{{ (form.vectorSearch.taskSearch.threshold * 100).toFixed(0) }}%</el-tag>
+                  </div>
+                  <div class="field-hint">AI 生成任务（如市场洞察）开启“自动匹配知识”时，低于该相似度的结果将被忽略。</div>
+                </el-form-item>
+                
+                <el-form-item label="检索数量限制 (TOP K)">
+                  <el-input-number
+                    v-model="form.vectorSearch.taskSearch.topK"
+                    :min="1"
+                    :max="50"
+                    size="large"
+                  />
+                  <div class="field-hint">AI 生成任务时自动匹配引入的最大相关知识分块数量。默认 10。</div>
+                </el-form-item>
+
+                <div class="form-actions" style="margin-top: 30px;">
                   <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
                     <el-icon><Check /></el-icon> 保存向量配置
                   </el-button>
@@ -440,8 +468,17 @@ const activePromptTab = ref('market-insight')
 // 为了防止 form 深拷贝丢失响应式，先克隆一份
 const form = ref({
   ...JSON.parse(JSON.stringify(settingsStore.settings)),
-  vectorSearch: settingsStore.settings.vectorSearch || { threshold: 0.3, topK: 10 }
+  vectorSearch: settingsStore.settings.vectorSearch || { 
+    documentSearch: { threshold: 0.3, topK: 10 },
+    taskSearch: { threshold: 0.3, topK: 10 }
+  }
 })
+if (!form.value.vectorSearch.documentSearch) {
+  form.value.vectorSearch.documentSearch = { threshold: 0.3, topK: 10 }
+}
+if (!form.value.vectorSearch.taskSearch) {
+  form.value.vectorSearch.taskSearch = { threshold: 0.5, topK: 5 }
+}
 
 // 模型下拉列表（计算属性）
 const llmModelsList = computed(() => {
@@ -740,10 +777,17 @@ onMounted(async () => {
   // 初始化 settingsStore 同步 config.json
   await settingsStore.init()
   // 同步 form 内容
-  form.value = {
-    ...JSON.parse(JSON.stringify(settingsStore.settings)),
-    vectorSearch: settingsStore.settings.vectorSearch || { threshold: 0.3, topK: 10 }
+  const settingsCopy = JSON.parse(JSON.stringify(settingsStore.settings))
+  if (!settingsCopy.vectorSearch) {
+    settingsCopy.vectorSearch = {
+      documentSearch: { threshold: 0.3, topK: 10 },
+      taskSearch: { threshold: 0.5, topK: 5 }
+    }
+  } else {
+    if (!settingsCopy.vectorSearch.documentSearch) settingsCopy.vectorSearch.documentSearch = { threshold: 0.3, topK: 10 }
+    if (!settingsCopy.vectorSearch.taskSearch) settingsCopy.vectorSearch.taskSearch = { threshold: 0.5, topK: 5 }
   }
+  form.value = settingsCopy
   
   // 加载路径信息
   const dbResult = await window.electronAPI.appGetConfigPath()

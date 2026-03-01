@@ -124,6 +124,16 @@ export function registerKnowledgeHandlers() {
         }
     })
 
+    ipcMain.handle('knowledge:deleteGlobalTag', (event, tag: string) => {
+        try {
+            knowledgeService.deleteGlobalTag(tag)
+            return { success: true }
+        } catch (e: any) {
+            logger.error('Knowledge', '全局删除标签失败', e.message)
+            return { success: false, error: e.message }
+        }
+    })
+
     // 在新窗口中打开 PDF（使用 Chromium 内置 PDF 查看器）
     ipcMain.handle('knowledge:openPdfWindow', (event, filePath: string) => {
         try {

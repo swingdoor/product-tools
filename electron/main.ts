@@ -49,7 +49,7 @@ function createWindow() {
   const iconPath = getIconPath()
 
   mainWindow = new BrowserWindow({
-    width: 1440,
+    width: 1600,
     height: 900,
     minWidth: 1200,
     minHeight: 700,

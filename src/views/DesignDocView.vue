@@ -122,8 +122,8 @@ const isEditing = ref(false)
 const editContent = ref('')
 const doc = ref<DesignDoc | null>(null)
 
-// 是否有未保存的修改
 const hasChanges = computed(() => {
+  if (!isEditing.value) return false
   return editContent.value !== (doc.value?.resultContent || '')
 })
 

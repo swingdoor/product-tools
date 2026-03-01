@@ -6,6 +6,7 @@ export const analysisRepo = {
         const rows = db.prepare('SELECT * FROM analysis_tasks ORDER BY createdAt DESC').all() as any[]
         return rows.map(row => ({
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             progress: fromDB<AnalysisProgress>(row.progress)
         }))
     },
@@ -15,6 +16,7 @@ export const analysisRepo = {
         if (!row) return undefined
         return {
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             progress: fromDB<AnalysisProgress>(row.progress)
         }
     },
@@ -22,8 +24,8 @@ export const analysisRepo = {
     save(task: AnalysisTask): AnalysisTask {
         const stmt = db.prepare(`
       INSERT OR REPLACE INTO analysis_tasks (
-        id, title, status, sourceReportId, sourceReportTitle, inputContent, resultContent, createdAt, updatedAt, errorMessage, progress
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, title, status, sourceReportId, sourceReportTitle, inputContent, resultContent, knowledgeRefMode, knowledgeRefDocs, createdAt, updatedAt, errorMessage, progress
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
         stmt.run(
             task.id,
@@ -33,6 +35,8 @@ export const analysisRepo = {
             task.sourceReportTitle || null,
             task.inputContent,
             task.resultContent || null,
+            task.knowledgeRefMode || null,
+            toDB(task.knowledgeRefDocs),
             task.createdAt,
             task.updatedAt,
             task.errorMessage || null,

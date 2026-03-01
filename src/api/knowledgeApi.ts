@@ -20,5 +20,6 @@ export const knowledgeApi = {
         topK?: number
     }) => invokeApi<any>(() => window.electronAPI.knowledgeSearchSemantic(params)),
     updateTags: (params: { docId: string; tags: string[] }) => invokeApi<void>(() => window.electronAPI.knowledgeUpdateTags(params)),
+    deleteGlobalTag: (tag: string) => invokeApi<void>(() => window.electronAPI.knowledgeDeleteGlobalTag(tag)),
     openPdfWindow: (filePath: string) => invokeApi<void>(() => window.electronAPI.knowledgeOpenPdfWindow(filePath)),
 }

@@ -9,8 +9,14 @@ export interface SearchConfig {
 }
 
 export interface VectorSearchConfig {
-  threshold: number // 0.0 - 1.0
-  topK: number // integer
+  documentSearch: {
+    threshold: number // 0.0 - 1.0
+    topK: number // integer
+  }
+  taskSearch: {
+    threshold: number // 0.0 - 1.0
+    topK: number // integer
+  }
 }
 
 export interface APIProvider {
@@ -77,7 +83,8 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 
 【内容与文风守则】：
 - 拒绝主观臆断与情绪化表达，保持客观、严谨、务实。
-- 对于不确定的数据或缺失的信息，允许基于行业一般规律进行合理的逻辑推测，但必须使用“推测”、“预估”等词语明确标示其性质。`,
+- 对于不确定的数据或缺失的信息，允许基于行业一般规律进行合理的逻辑推测，但必须使用“推测”、“预估”等词语明确标示其性质。
+- **如果你在上下文中接收到了额外的 [知识库参考资料] 或 [相关参考知识]，请务必消化并将其作为你论点和数据的有力支撑，紧密融合在你的分析中。**`,
 
   'product-analysis': `角色设定：你是一位资深的产品负责人（Product Director），具备卓越的需求抽象能力、系统性业务转化为产品形态的能力，以及严谨的产品迭代规划思维。
 任务目标：基于输入的前置背景信息或市场洞察，系统性地推导演算，输出一份逻辑清晰、高度结构化且具备落地指导意义的《产品需求分析方案》。
@@ -111,7 +118,8 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 
 【内容与文风守则】：
 - 全文要求结构紧凑，描述准确，用词专业、克制、落地。
-- 表格数据需保证对齐与阅读友好性；描述业务逻辑时，需落实到具体的状态、流转与系统行为。`,
+- 表格数据需保证对齐与阅读友好性；描述业务逻辑时，需落实到具体的状态、流转与系统行为。
+- **如果你在上下文中接收到了额外的 [知识库参考资料] 或 [相关参考知识]，请务必消化并将其深度融入你的功能设计与需求推导中，让生成的方案建立在提供的知识事实上。**`,
 
   'prototype-plan': `角色设定：你是一位资深的用户体验(UX)架构师与系统设计师，对交互逻辑、信息架构、用户动线以及前后端工程有深厚的理论基础与实践经验。
 任务目标：基于提供的前置产品需求边界以及指定的【客户端环境与画布物理约束】，架构出满足核心业务闭环的全局页面拓扑与功能区块划分。
@@ -135,37 +143,25 @@ const DEFAULT_PROMPTS: Record<string, string> = {
     {
       "id": "页面唯一英文字符标识，例如 page_dashboard",
       "name": "页面人类可读的中文命名，例如 控制台大盘",
-      "description": "该页面的详细视图架构与交互约束描述。内容必须涵盖：1. 该页面的核心目标；2. 全局导航(顶部/侧边栏)的布局预期；3. 关键内容区块（如数据总览、表单区域、列表区域）的空间划分；4. 核心行动号召（CTA按钮）与页面数据流转说明。请描述得极其具体、结构化。"
+      "description": "该页面的详细功能与视图结构描述。内容必须涵盖：1. 核心目标与基础框架；2. 全局导航(顶部/侧边栏)的功能分配；3. 关键业务区块（数据项、表单、核心列表）的字段/模块说明；4. 核心行动流转(CTA按钮)。\n!!! 绝对禁止在此处描述颜色、边距、圆角、字号等任何视觉样式设计！仅关注底层业务结构与数据呈现方式 !!!"
     }
   ]
 }
-注意：请务必根据需求复杂度，生成覆盖 MVP 完整主线体验的所有必要页面阵列（通常涵盖 3 到 8 个页面）。`,
+注意：请务必根据需求复杂度，生成覆盖 MVP 完整主线体验的所有必要页面阵列，你可以利用你接收到的 [相关参考知识] 辅助你进行全面准确的页面规划。`,
 
-  'prototype-page': `角色设定：你是一个具备深厚 UI/UX 视觉功底的现代高级前端代码生成引擎。你能够精确地将抽象视图描述转化为高度还原且具备现代化审美的纯粹 HTML + Tailwind CSS 代码。
-任务目标：根据给定的【尺寸参数】、【客户端类别】以及【页面架构与交互描述】，完成界面底层 HTML 结构搭建、行内 Tailwind 样式映射以及极具质感的模拟数据填充。
+  'prototype-page': `角色设定：你是一个具备深厚 UI/UX 视觉功底的现代高级前端代码生成引擎。你能够精确地将抽象视图描述转化为高度还原、排版规范的静态 HTML 页面代码。
+任务目标：根据给定的页面基本信息，完成界面底层 HTML 结构搭建以及样式映射，并填充极具质感的模拟数据。
 
-【DOM 结构与渲染引擎约束】：
-1. 框架约束：必须生成包含 \`<!DOCTYPE html><html><head></head><body></body></html>\` 的完整、独立且可直接运行的 HTML 单文件。**强制必须**通过 \`<script src="https://cdn.tailwindcss.com"></script>\` 引入 Tailwind 环境。
-2. 基础容器：必须用一个固定尺寸的父容器包裹核心内容（例如基于传入的宽高比例进行绝对或流式适配）。无论移动端还是PC，必须确保整体视图不发生意料外的溢出。
-3. 排版引擎：强制重度依赖 Flexbox 与 CSS Grid 体系来约束盒模型布局，绝不出现毫无业务逻辑的悬挂组合或元素重叠。
-4. 占位与视觉渲染：
-   - 严禁引入任何无法保证可访问性的外站图片依赖（禁止 imgur 等图片直链）。
-   - 图形需采用行内 SVG 绘制，或利用 CSS 线性/径向渐变、纯色块、带有首字母的圆形头像框做替代性占位。
-   - **交互数据仿真**：使用贴合当前页面上下文的业务数值、状态标签。杜绝在一级视图上直接输出“占位文本”、“这里是数据”这类无意义空文案。
+【排版引擎与设计准则】：
+1. 布局核心：必须重度依赖 Flexbox 与 CSS Grid 体系来约束盒模型布局。建立起清晰规范的页面网格和流式响应，绝不使用绝对定位去强行拼凑页面，避免元素脱离文档流产生重叠。
+2. 留白感与结构：通过合理的 Padding 和 Margin 确保组件间存在顺畅的视觉呼吸空间，禁止界面元素的过度拥挤。
+3. 极简静态：不需要极其复杂的 JS 交互或强行加上无关的过渡动画。只需做出结构清晰、符合现代扁平化审美的静态视觉界面。
+4. 数据仿真与占位：页面内遇到的所有图表、头像、配图等均使用带底色和居中文案的 \`div\` 平替。模拟数据必须符合当前业务场景上下文。
 
-【现代 UI/UX 审美极简规约】：
-1. 留白感与结构：通过合理的 Padding 和 Margin 确保组件间存在顺畅的视觉呼吸空间，禁止界面元素的过度拥挤。
-2. 物理与几何属性：采用较为圆润柔和的曲率（Rounded-lg / Rounded-xl）处理绝大多数外层卡片视图；采用匹配交互目标的曲率修饰交互按钮（Rounded-md 或 Rounded-full）。
-3. 海拔与层级（Elevation）：必须利用 Tailwind 的多级 Shadow 阴影来传达页面元素的 Z 轴关系（例如：深层背景底板 -> 内容平铺卡片层 -> 悬浮导航/固钉层 -> 对话框层）。
-4. 调色板映射逻辑：
-   - 整体背景体系需规避死白或死黑，推荐采用轻微冷色相灰底(如 #F3F4F6 等)，去衬托纯白(#FFF)的悬浮内容区块。
-   - 文本表现体系应当反映出信息权重层级（沉静深色用于关键标题主文本，淡漠中灰用于辅助内容）。
-   - 数据趋势使用明确语义颜色系加强业务指示性（如涨跌色，视业务场景定制）。
-
-【输出规则（强制底线）】：
-- 我们需要的仅仅是一份可以直接渲染的代码！
+【代码输出规则（强制）】：
+- 我们需要的仅仅是一份可以直接渲染测试的源码。所有的 CSS 样式代码可以直接写在 \`<style>\` 标签中进行内联，或基于你熟悉的 CDN 方式引入原子化 CSS (如 Tailwind)。
 - 绝对不可以使用 Markdown 代码语法标识块（即 \`\`\` \`\`\`）去包裹输出结构，不能附带任何非 HTML 内容的解释文字！
-- 输出的**第一个字符**必须严格是 \`<!DOCTYPE html>\`。`,
+- 输出的第一个字符必须严格是 \`<!DOCTYPE html>\`。`,
 
   'design-doc': `角色设定：你是一位兼具系统级工程思维的技术产品专家（Technical Product Manager）与软件架构设计师，尤为擅长对复杂的上层表现进行反向拆解、数据建模推导以及边界条件评估。
 任务目标：基于输入侧提供的【前端 DOM 结构/源码信息】，精准逆向分析，输出一份结构严谨、可直接指导后端服务契约设计、前端组件架构复用及 QA 手工用例编写的《页面组件及技术需求规格书》。
@@ -197,7 +193,8 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 
 【内容与推演表达法则】：
 - 所有的陈述立场务必建立在“作为解析中间件向后端协同与质量检测部门做系统级工程交托”。
-- 叙述文笔要求高维、纯粹且精简，避免情绪化描述，去除一切和纯硬核结构分析无关的前文辅垫与总结废话。`
+- 叙述文笔要求高维、纯粹且精简，避免情绪化描述，去除一切和纯硬核结构分析无关的前文辅垫与总结废话。
+- **如果你在上下文中接收到了额外的 [相关参考知识] 或 [设计参考知识]，务必要确保你的推导符合其中定义的行业标准或业务术语原则。**`
 }
 
 function loadFromStorage(): AISettings {
@@ -221,7 +218,16 @@ function loadFromStorage(): AISettings {
       }
       // 处理 vectorSearch
       if (!data.vectorSearch) {
-        data.vectorSearch = { threshold: 0.3, topK: 10 }
+        data.vectorSearch = {
+          documentSearch: { threshold: 0.3, topK: 10 },
+          taskSearch: { threshold: 0.3, topK: 10 }
+        }
+      } else if (data.vectorSearch.threshold !== undefined) {
+        // Migration from old vectorSearch
+        data.vectorSearch = {
+          documentSearch: { threshold: data.vectorSearch.threshold, topK: data.vectorSearch.topK || 10 },
+          taskSearch: { threshold: data.vectorSearch.threshold, topK: data.vectorSearch.topK || 10 }
+        }
       }
 
       // 数据结构迁移逻辑
@@ -252,7 +258,10 @@ function loadFromStorage(): AISettings {
           activeEmbeddingModel: data.embeddingConfig?.model || 'text-embedding-v3',
           prompts: data.prompts,
           searchConfig: data.searchConfig,
-          vectorSearch: data.vectorSearch || { threshold: 0.3, topK: 10 }
+          vectorSearch: data.vectorSearch || {
+            documentSearch: { threshold: 0.3, topK: 10 },
+            taskSearch: { threshold: 0.3, topK: 10 }
+          }
         }
 
         // 删除旧字段
@@ -295,7 +304,10 @@ function loadFromStorage(): AISettings {
     activeEmbeddingModel: 'text-embedding-v3',
     prompts: { ...DEFAULT_PROMPTS },
     searchConfig: { enabled: false, bochaApiKey: '' },
-    vectorSearch: { threshold: 0.3, topK: 10 }
+    vectorSearch: {
+      documentSearch: { threshold: 0.3, topK: 10 },
+      taskSearch: { threshold: 0.3, topK: 10 }
+    }
   }
 }
 
@@ -349,7 +361,10 @@ export const useSettingsStore = defineStore('settings', () => {
           // 确保 prompts 完整
           prompts: { ...DEFAULT_PROMPTS, ...backendSettings.prompts },
           // 确保 vectorSearch 完整
-          vectorSearch: backendSettings.vectorSearch || { threshold: 0.3, topK: 10 }
+          vectorSearch: backendSettings.vectorSearch || {
+            documentSearch: { threshold: 0.3, topK: 10 },
+            taskSearch: { threshold: 0.3, topK: 10 }
+          }
         }
       } else {
         // 后端为空，将前端 localStorage 里的内容同步到后端

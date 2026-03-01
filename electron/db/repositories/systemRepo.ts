@@ -26,8 +26,8 @@ interface ConfigSchema {
             bochaApiKey: string
         }
         vectorSearch: {
-            threshold: number
-            topK: number
+            documentSearch: { threshold: number; topK: number }
+            taskSearch: { threshold: number; topK: number }
         }
     }
 }
@@ -48,7 +48,10 @@ const DEFAULT_SETTINGS: ConfigSchema['settings'] = {
     activeEmbeddingModel: 'deepseek-chat',
     prompts: {},
     searchConfig: { enabled: false, bochaApiKey: '' },
-    vectorSearch: { threshold: 0.3, topK: 10 }
+    vectorSearch: {
+        documentSearch: { threshold: 0.3, topK: 10 },
+        taskSearch: { threshold: 0.5, topK: 5 }
+    }
 }
 
 export const systemRepo = {

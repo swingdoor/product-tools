@@ -6,6 +6,7 @@ export const designDocRepo = {
         const rows = db.prepare('SELECT * FROM design_docs ORDER BY createdAt DESC').all() as any[]
         return rows.map(row => ({
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             progress: fromDB<DesignDocProgress>(row.progress)
         }))
     },
@@ -15,6 +16,7 @@ export const designDocRepo = {
         if (!row) return undefined
         return {
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             progress: fromDB<DesignDocProgress>(row.progress)
         }
     },
@@ -22,8 +24,8 @@ export const designDocRepo = {
     save(doc: DesignDoc): DesignDoc {
         const stmt = db.prepare(`
       INSERT OR REPLACE INTO design_docs (
-        id, title, status, sourceProjectId, sourceProjectTitle, pageCount, resultContent, createdAt, updatedAt, errorMessage, progress
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, title, status, sourceProjectId, sourceProjectTitle, pageCount, resultContent, knowledgeRefMode, knowledgeRefDocs, createdAt, updatedAt, errorMessage, progress
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
         stmt.run(
             doc.id,
@@ -33,6 +35,8 @@ export const designDocRepo = {
             doc.sourceProjectTitle,
             doc.pageCount,
             doc.resultContent || null,
+            doc.knowledgeRefMode || null,
+            toDB(doc.knowledgeRefDocs),
             doc.createdAt,
             doc.updatedAt,
             doc.errorMessage || null,

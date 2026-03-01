@@ -134,6 +134,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('knowledge:searchSemantic', params),
   knowledgeUpdateTags: (params: { docId: string; tags: string[] }) =>
     ipcRenderer.invoke('knowledge:updateTags', params),
+  knowledgeDeleteGlobalTag: (tag: string) =>
+    ipcRenderer.invoke('knowledge:deleteGlobalTag', tag),
   knowledgeOpenPdfWindow: (filePath: string) => ipcRenderer.invoke('knowledge:openPdfWindow', filePath),
 
   // ── 应用配置 ───────────────────────────────────────

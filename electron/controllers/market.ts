@@ -4,6 +4,7 @@ import { MarketReport } from '../../src/electron.d'
 import { callMarketAIWithHeartbeat } from '../services/ai'
 import type { TaskState } from '../services/taskRunner'
 import { webSearch, type WebSearchConfig } from '../services/webSearch'
+import { buildKnowledgeContext } from '../utils/knowledgeContext'
 import { logger } from '../logger'
 
 /** 执行市场报告生成任务 */
@@ -62,12 +63,23 @@ export async function executeMarketTask(
             return
         }
 
+        // 提取知识库上下文
+        const knowledgeContext = await buildKnowledgeContext(
+            reportId,
+            report.knowledgeRefMode,
+            report.knowledgeRefDocs,
+            [report.industry, report.targetUsers, ...(report.focusAreas || [])].join(' '),
+            (msg) => { systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() }) }
+        )
+
         // 将搜索到的数据合并到 report 中（临时克隆一份，不污染数据库里的原始输入）
         const enrichedReport = {
             ...report,
-            dataSources: researchData
-                ? `${report.dataSources || ''}\n\n[Deep Research 实时检索数据]:\n${researchData}`
-                : report.dataSources
+            dataSources: [
+                report.dataSources || '',
+                researchData ? `[Deep Research 实时检索数据]:\n${researchData}` : '',
+                knowledgeContext ? `[知识库参考资料]:\n${knowledgeContext}` : ''
+            ].filter(Boolean).join('\n\n')
         }
 
         // 调用 AI 生成报告

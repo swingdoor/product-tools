@@ -19,6 +19,16 @@
           <el-option label="标签搜索" value="tag" />
           <el-option label="语义搜索" value="semantic" />
         </el-select>
+        <div class="view-toggle">
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button label="card">
+              <el-icon><Menu /></el-icon>
+            </el-radio-button>
+            <el-radio-button label="list">
+              <el-icon><Operation /></el-icon>
+            </el-radio-button>
+          </el-radio-group>
+        </div>
         <el-button type="primary" @click="handleSearch" :loading="searching">
           <el-icon><Search /></el-icon>
           搜索
@@ -57,88 +67,181 @@
           <el-button type="primary" @click="handleUpload">上传文档</el-button>
         </el-empty>
       </div>
-      <div v-else class="doc-grid">
-        <div v-for="doc in filteredDocuments" :key="doc.id" class="doc-card">
-          <div class="doc-icon">
-            <el-icon :size="36" :color="getFileColor(doc.type)">
-              <component :is="getFileIcon(doc.type)" />
-            </el-icon>
-          </div>
-          <div class="doc-content">
-            <!-- 第一行：名称和操作 -->
-            <div class="card-row">
-              <div class="doc-name" :title="doc.filename">{{ doc.filename }}</div>
-              <div class="doc-actions">
-                <el-tooltip content="添加标签" placement="top">
-                  <el-button size="small" circle @click="openTagDialog(doc)">
-                    <el-icon><CollectionTag /></el-icon>
+      <div v-else>
+        <!-- 卡片视图 -->
+        <div v-if="viewMode === 'card'" class="doc-grid">
+          <div v-for="doc in filteredDocuments" :key="doc.id" class="doc-card">
+            <div class="doc-icon">
+              <el-icon :size="36" :color="getFileColor(doc.type)">
+                <component :is="getFileIcon(doc.type)" />
+              </el-icon>
+            </div>
+            <div class="doc-content">
+              <!-- 第一行：名称和操作 -->
+              <div class="card-row">
+                <div class="doc-name" :title="doc.filename">{{ doc.filename }}</div>
+                <div class="doc-actions">
+                  <el-tooltip content="管理标签" placement="top">
+                    <el-button size="small" circle @click="openTagDialog(doc)">
+                      <el-icon><CollectionTag /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip content="预览" placement="top">
+                    <el-button size="small" circle @click="handlePreview(doc)">
+                      <el-icon><View /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip content="下载" placement="top">
+                    <el-button size="small" circle @click="handleDownload(doc)">
+                      <el-icon><Download /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-button size="small" circle type="danger" plain @click="confirmDelete(doc.id)">
+                    <el-icon><Delete /></el-icon>
                   </el-button>
-                </el-tooltip>
-                <el-tooltip content="预览" placement="top">
-                  <el-button size="small" circle @click="handlePreview(doc)">
-                    <el-icon><View /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip content="下载" placement="top">
-                  <el-button size="small" circle @click="handleDownload(doc)">
-                    <el-icon><Download /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-button size="small" circle type="danger" plain @click="confirmDelete(doc.id)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
+                </div>
+              </div>
+
+              <!-- 第二行：类型、大小、时间 -->
+              <div class="card-row meta-row">
+                <div class="meta-left">
+                  <el-tag size="small" effect="plain" :type="getFileTagType(doc.type)">{{ doc.type.toUpperCase() }}</el-tag>
+                  <span class="doc-size">{{ formatSize(doc.size) }}</span>
+                </div>
+                <div class="doc-date">{{ formatDate(doc.createdAt) }}</div>
+              </div>
+
+              <!-- 第三行：标签 -->
+              <div class="doc-tags" v-if="parseTags(doc.tags).length > 0">
+                <el-tag
+                  v-for="tag in parseTags(doc.tags)"
+                  :key="tag"
+                  size="small"
+                >{{ tag }}</el-tag>
               </div>
             </div>
-
-            <!-- 第二行：类型、大小、时间 -->
-            <div class="card-row meta-row">
-              <div class="meta-left">
-                <el-tag size="small" effect="plain" :type="getFileTagType(doc.type)">{{ doc.type.toUpperCase() }}</el-tag>
-                <span class="doc-size">{{ formatSize(doc.size) }}</span>
-              </div>
-              <div class="doc-date">{{ formatDate(doc.createdAt) }}</div>
-            </div>
-
-            <!-- 第三行：标签（如果有） -->
-            <div class="doc-tags" v-if="parseTags(doc.tags).length > 0">
-              <el-tag
-                v-for="tag in parseTags(doc.tags)"
-                :key="tag"
-                size="small"
-                closable
-                @close="removeTag(doc, tag)"
-              >{{ tag }}</el-tag>
-            </div>
           </div>
+        </div>
+
+        <!-- 列表视图 -->
+        <div v-else class="doc-table-wrap">
+          <el-table :data="filteredDocuments" style="width: 100%" class="task-table">
+            <el-table-column label="文件名" min-width="250">
+              <template #default="{ row }">
+                <div class="table-doc-name">
+                  <el-icon :color="getFileColor(row.type)" style="margin-right: 8px">
+                    <component :is="getFileIcon(row.type)" />
+                  </el-icon>
+                  <span class="name-text" :title="row.filename">{{ row.filename }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            
+            <el-table-column label="标签" min-width="180">
+              <template #default="{ row }">
+                <div class="table-tags">
+                  <el-tag
+                    v-for="tag in parseTags(row.tags)"
+                    :key="tag"
+                    size="small"
+                    style="margin-right: 4px"
+                  >{{ tag }}</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="type" label="类型" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain" :type="getFileTagType(row.type)">
+                  {{ row.type.toUpperCase() }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="大小" width="120" align="right">
+              <template #default="{ row }">
+                <span class="meta-text">{{ formatSize(row.size) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="创建时间" width="180" align="center">
+              <template #default="{ row }">
+                <span class="meta-text">{{ formatDate(row.createdAt) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="操作" width="200" fixed="right">
+              <template #default="{ row }">
+                <div class="table-actions">
+                  <el-button size="small" type="primary" link @click="openTagDialog(row)">标签</el-button>
+                  <el-button size="small" type="primary" link @click="handlePreview(row)">预览</el-button>
+                  <el-button size="small" type="primary" link @click="handleDownload(row)">下载</el-button>
+                  <el-button size="small" type="danger" link @click="confirmDelete(row.id)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </div>
     </main>
 
-    <!-- 添加标签弹窗 -->
-    <el-dialog v-model="showTagDialog" title="管理标签" width="440px">
+    <!-- 管理标签弹窗 -->
+    <el-dialog v-model="showTagDialog" title="管理标签" width="480px" destroy-on-close>
       <div class="tag-dialog-body">
-        <div class="existing-tags" v-if="tagDialogTags.length > 0">
-          <el-tag
-            v-for="tag in tagDialogTags"
-            :key="tag"
-            closable
-            @close="tagDialogTags = tagDialogTags.filter(t => t !== tag)"
-            style="margin: 0 6px 6px 0"
-          >{{ tag }}</el-tag>
+        <!-- 当前文档的标签 -->
+        <div class="dialog-section">
+          <div class="section-label">当前文档标签</div>
+          <div class="tag-container">
+            <el-tag
+              v-for="tag in tagDialogTags"
+              :key="tag"
+              closable
+              @close="tagDialogTags = tagDialogTags.filter(t => t !== tag)"
+              class="manage-tag"
+            >{{ tag }}</el-tag>
+            <span v-if="tagDialogTags.length === 0" class="no-data-tip">暂无标签</span>
+          </div>
         </div>
-        <div class="add-tag-row">
-          <el-input
-            v-model="newTagInput"
-            placeholder="输入标签名称，回车添加"
-            size="small"
-            @keyup.enter="addTagFromInput"
-          />
-          <el-button size="small" type="primary" @click="addTagFromInput">添加</el-button>
+
+        <!-- 输入新标签 -->
+        <div class="dialog-section">
+          <div class="section-label">添加新标签</div>
+          <div class="add-tag-row">
+            <el-input
+              v-model="newTagInput"
+              placeholder="输入新标签，回车或点击添加"
+              size="default"
+              @keyup.enter="addTagFromInput"
+            >
+              <template #append>
+                <el-button @click="addTagFromInput">添加</el-button>
+              </template>
+            </el-input>
+          </div>
+        </div>
+
+        <!-- 历史/系统标签 -->
+        <div class="dialog-section">
+          <div class="section-label">所有历史标签 (点击快速选择，点击垃圾桶全局删除)</div>
+          <div class="tag-history-list">
+            <div 
+              v-for="tag in allSystemTags" 
+              :key="tag" 
+              class="history-tag-item"
+              :class="{ 'is-active': tagDialogTags.includes(tag) }"
+            >
+              <span class="tag-text" @click="toggleTag(tag)">{{ tag }}</span>
+              <el-icon class="delete-icon" @click.stop="confirmGlobalDelete(tag)"><Delete /></el-icon>
+            </div>
+            <span v-if="allSystemTags.length === 0" class="no-data-tip">暂无历史标签</span>
+          </div>
         </div>
       </div>
       <template #footer>
-        <el-button @click="showTagDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveTagsForDoc">保存</el-button>
+        <div class="dialog-footer">
+          <el-button @click="showTagDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveTagsForDoc">保存更改</el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -154,10 +257,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
-import { Search, UploadFilled, View, Download, Delete, Loading, Document as DocIcon, Notebook, CollectionTag } from '@element-plus/icons-vue'
+import { Search, UploadFilled, View, Download, Delete, Loading, Document as DocIcon, Notebook, CollectionTag, Menu, Operation } from '@element-plus/icons-vue'
 import { knowledgeApi } from '@/api/knowledgeApi'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -171,6 +274,11 @@ const searching = ref(false)
 const documents = ref<any[]>([])
 const searchQuery = ref('')
 const searchType = ref<'keyword' | 'semantic' | 'tag'>('keyword')
+const viewMode = ref<'card' | 'list'>((localStorage.getItem('knowledgeViewMode') as any) || 'card')
+
+watch(viewMode, (val) => {
+  localStorage.setItem('knowledgeViewMode', val)
+})
 
 // 上传进度
 const showUploadProgress = ref(false)
@@ -200,6 +308,15 @@ const filteredDocuments = computed(() => {
     d.filename.toLowerCase().includes(q) ||
     d.type.toLowerCase().includes(q)
   )
+})
+
+// 获取系统中所有不重复的标签
+const allSystemTags = computed(() => {
+  const tagSet = new Set<string>()
+  documents.value.forEach(doc => {
+    parseTags(doc.tags).forEach(tag => tagSet.add(tag))
+  })
+  return Array.from(tagSet).sort()
 })
 
 // 加载文档列表
@@ -302,8 +419,8 @@ async function handleSearch() {
         baseUrl: embeddingConfig.baseUrl,
         model: embeddingConfig.model
       },
-      threshold: settingsStore.settings.vectorSearch?.threshold,
-      topK: settingsStore.settings.vectorSearch?.topK
+      threshold: settingsStore.settings.vectorSearch?.documentSearch?.threshold,
+      topK: settingsStore.settings.vectorSearch?.documentSearch?.topK
     })
     if (res.success && res.data) {
       semanticResults.value = res.data
@@ -397,23 +514,82 @@ function addTagFromInput() {
 }
 
 async function saveTagsForDoc() {
+  if (!tagDialogDocId.value) return
   try {
-    await knowledgeApi.updateTags({ docId: tagDialogDocId.value, tags: tagDialogTags.value })
-    ElMessage.success('标签已更新')
-    showTagDialog.value = false
-    await loadDocuments()
+    console.log('Updating tags for:', tagDialogDocId.value, tagDialogTags.value)
+    const res = await knowledgeApi.updateTags({ 
+      docId: tagDialogDocId.value, 
+      tags: [...tagDialogTags.value] 
+    })
+    
+    if (res.success) {
+      ElMessage.success('标签已更新')
+      showTagDialog.value = false
+      await loadDocuments()
+    } else {
+      ElMessage.error(res.error || '更新标签失败')
+    }
   } catch (err: any) {
-    ElMessage.error('更新标签失败')
+    console.error('Save tags error:', err)
+    ElMessage.error('更新标签过程中出错')
   }
 }
 
 async function removeTag(doc: any, tag: string) {
   const tags = parseTags(doc.tags).filter(t => t !== tag)
   try {
-    await knowledgeApi.updateTags({ docId: doc.id, tags })
-    await loadDocuments()
+    const res = await knowledgeApi.updateTags({ docId: doc.id, tags })
+    if (res.success) {
+      await loadDocuments()
+    } else {
+      ElMessage.error(res.error || '删除标签失败')
+    }
   } catch {
-    ElMessage.error('删除标签失败')
+    ElMessage.error('删除标签出错')
+  }
+}
+
+// 弹窗内的标签切换逻辑
+function toggleTag(tag: string) {
+  if (tagDialogTags.value.includes(tag)) {
+    tagDialogTags.value = tagDialogTags.value.filter(t => t !== tag)
+  } else {
+    tagDialogTags.value.push(tag)
+  }
+}
+
+// 全局删除标签确认
+async function confirmGlobalDelete(tag: string) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要全局删除标签 "${tag}" 吗？所有已标记该标签的文件都会移除此标签。此操作不可撤销。`,
+      '全局删除标签',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await handleGlobalDeleteTag(tag)
+  } catch {
+    // 取消
+  }
+}
+
+// 执行全局删除
+async function handleGlobalDeleteTag(tag: string) {
+  try {
+    const res = await (knowledgeApi as any).deleteGlobalTag(tag)
+    if (res.success) {
+      ElMessage.success('标签已全局删除')
+      // 如果当前弹窗中包含此标签，也移除它
+      tagDialogTags.value = tagDialogTags.value.filter(t => t !== tag)
+      await loadDocuments()
+    } else {
+      ElMessage.error(res.error || '全局删除失败')
+    }
+  } catch (err: any) {
+    ElMessage.error('全局删除出错')
   }
 }
 
@@ -455,9 +631,19 @@ function formatSize(bytes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (!dateStr) return '-'
+  try {
+    const date = new Date(dateStr)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return dateStr
+  }
 }
 
 onMounted(() => {
@@ -496,7 +682,11 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+}
+
+.view-toggle {
+  margin-right: 4px;
 }
 
 /* 语义搜索结果 */
@@ -568,7 +758,46 @@ onMounted(() => {
 
 .doc-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)); /* 关键修复：确保列可以收缩，防止溢出 */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.doc-table-wrap {
+  background: var(--bg-white);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-split);
+}
+
+.table-doc-name {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  width: 100%;
+  overflow: hidden;
+}
+
+.name-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.table-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meta-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.table-actions {
+  display: flex;
   gap: 12px;
 }
 
@@ -720,5 +949,104 @@ onMounted(() => {
 @keyframes rotating {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+.tag-dialog-body {
+  padding: 4px 0;
+}
+
+.dialog-section {
+  margin-bottom: 20px;
+}
+
+.dialog-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.tag-container {
+  min-height: 40px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px dashed #ddd;
+}
+
+.manage-tag {
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.no-data-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.add-tag-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tag-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.history-tag-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border-split);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.history-tag-item:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.history-tag-item.is-active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tag-text {
+  flex: 1;
+  margin-right: 6px;
+}
+
+.delete-icon {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  padding: 2px;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+
+.delete-icon:hover {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

@@ -3,7 +3,6 @@
     <!-- 顶部工具栏 -->
     <header class="page-header">
       <div class="header-left">
-        <h1 class="page-title">设计文档</h1>
         <span class="task-count">共 {{ designDocStore.tasks.length }} 个文档</span>
       </div>
       <div class="header-right">
@@ -50,7 +49,7 @@
         @row-click="handleRowClick"
         v-loading="designDocStore.loading"
       >
-        <el-table-column prop="title" label="文档名称" min-width="200">
+        <el-table-column prop="title" label="文档名称" width="340">
           <template #default="{ row }">
             <div class="task-name">
               <el-icon v-if="row.status === 'generating'" class="rotating" color="#165DFF"><Loading /></el-icon>
@@ -68,6 +67,14 @@
             <el-tag :type="getStatusType(row.status)" size="small" effect="light">
               {{ getStatusText(row.status) }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="引用知识" width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.knowledgeRefDocs?.length" class="ref-docs-text">
+              {{ getRefDocsNames(row.knowledgeRefDocs) }}
+            </span>
+            <span v-else class="no-ref-text">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="updatedAt" label="最近更新" width="180">
@@ -186,6 +193,10 @@
             <el-tag :type="getStatusType(row.status)" size="small" effect="light">
               {{ getStatusText(row.status) }}
             </el-tag>
+            <span v-if="row.knowledgeRefDocs?.length" class="card-ref-info">
+              <el-icon><Document /></el-icon>
+              知识: {{ row.knowledgeRefDocs.length }}
+            </span>
           </div>
 
           <!-- 第三行：日期 -->
@@ -193,32 +204,77 @@
             <div class="card-date">{{ formatDate(row.updatedAt) }}</div>
           </div>
         </div>
-        <el-empty v-if="!filteredTasks.length" description="暂无文档" />
+        <div v-if="!filteredTasks.length" class="empty-wrapper">
+          <el-empty description="暂无文档" />
+        </div>
       </div>
     </main>
 
     <!-- 新建弹窗 -->
-    <el-dialog v-model="showCreateDialog" title="新建设计文档" width="500px">
-      <el-form :model="createForm" label-position="top">
-        <el-form-item label="关联项目/原型" required>
-          <el-select v-model="createForm.sourceProjectId" placeholder="请选择已完成的项目或原型" style="width: 100%">
-            <el-option
-              v-for="p in completedProjects"
-              :key="p.id"
-              :label="p.title"
-              :value="p.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="文档标题 (选填)">
-          <el-input v-model="createForm.title" placeholder="留空则自动根据项目生成" />
-        </el-form-item>
+    <el-dialog v-model="showCreateDialog" title="新建设计文档" width="600px" :close-on-click-modal="false" class="ant-dialog">
+      <el-form :model="createForm" label-position="top" class="compact-form">
+        <div class="form-section">
+          <div class="section-title">基础配置</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="文档标题 (选填)">
+                <el-input v-model="createForm.title" placeholder="自动根据项目生成" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="关联项目/原型" required>
+                <el-select v-model="createForm.sourceProjectId" placeholder="请选择项目" style="width: 100%">
+                  <el-option
+                    v-for="p in completedProjects"
+                    :key="p.id"
+                    :label="p.title"
+                    :value="p.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <div class="form-section">
+          <div class="section-title">参考配置</div>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="引用知识库">
+                <el-radio-group v-model="createForm.knowledgeRefMode" size="small" class="compact-radio">
+                  <el-radio value="none">不引用</el-radio>
+                  <el-radio value="auto">自动检索</el-radio>
+                  <el-radio value="manual">手动选择</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-form-item v-if="createForm.knowledgeRefMode === 'manual'" class="compact-item">
+            <el-select
+              v-model="createForm.knowledgeRefDocs"
+              multiple
+              filterable
+              placeholder="请选择知识库文档..."
+              style="width: 100%"
+            >
+              <el-option
+                v-for="doc in availableDocs"
+                :key="doc.id"
+                :label="doc.filename"
+                :value="doc.id"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" :disabled="!createForm.sourceProjectId" @click="handleCreate">
-          创建并开始生成
-        </el-button>
+        <div class="dialog-footer">
+          <el-button @click="showCreateDialog = false">取消</el-button>
+          <el-button type="primary" :disabled="!createForm.sourceProjectId" @click="handleCreate">
+            创建并开始生成
+          </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -233,6 +289,7 @@ import { useDesignDocStore, type DesignDoc, type TaskStatus } from '@/stores/des
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
 import { useProductPrototypeStore } from '@/stores/productPrototype'
 import { useSettingsStore } from '@/stores/settings'
+import { knowledgeApi } from '@/api/knowledgeApi'
 
 const router = useRouter()
 const designDocStore = useDesignDocStore()
@@ -254,8 +311,13 @@ const statusFilter = ref('')
 const showCreateDialog = ref(false)
 const createForm = ref({
   sourceProjectId: '',
-  title: ''
+  title: '',
+  knowledgeRefMode: 'none' as 'none' | 'auto' | 'manual',
+  knowledgeRefDocs: [] as string[]
 })
+
+// 知识库文档
+const availableDocs = ref<any[]>([])
 
 // 轮询
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -297,8 +359,18 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
 // 格式化日期
 function formatDate(dateStr: string) {
   if (!dateStr) return '-'
-  // 处理 ISO 格式或其他带 T/Z 的格式
-  return dateStr.replace('T', ' ').split('.')[0].replace('Z', '')
+  try {
+    const date = new Date(dateStr)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return dateStr
+  }
 }
 
 function getStatusText(status: TaskStatus): string {
@@ -309,6 +381,15 @@ function getStatusText(status: TaskStatus): string {
     failed: '失败'
   }
   return map[status] || '未知'
+}
+
+// 获取引用文档名称列表
+function getRefDocsNames(docIds?: string[]): string {
+  if (!docIds || docIds.length === 0) return '-'
+  return docIds
+    .map(id => availableDocs.value.find(d => d.id === id)?.filename)
+    .filter(name => !!name)
+    .join(', ')
 }
 
 function getRowClassName({ row }: { row: DesignDoc }): string {
@@ -328,7 +409,9 @@ async function handleCreate() {
   const doc = await designDocStore.createTask({
     title: createForm.value.title || `${source?.title} 设计文档`,
     sourceProjectId: sourceId,
-    sourceProjectTitle: source?.title || ''
+    sourceProjectTitle: source?.title || '',
+    knowledgeRefMode: createForm.value.knowledgeRefMode,
+    knowledgeRefDocs: [...createForm.value.knowledgeRefDocs]
   })
 
   if (doc?.task) {
@@ -340,7 +423,7 @@ async function handleCreate() {
     )
     startPolling()
     ElMessage.success('文档已创建，开始生成中...')
-    createForm.value = { sourceProjectId: '', title: '' }
+    createForm.value = { sourceProjectId: '', title: '', knowledgeRefMode: 'none', knowledgeRefDocs: [] }
   }
 }
 
@@ -413,6 +496,11 @@ onMounted(async () => {
   if (designDocStore.tasks.some(t => t.status === 'generating')) {
     startPolling()
   }
+  knowledgeApi.getList().then(res => {
+    if (res.success && res.data) {
+      availableDocs.value = res.data
+    }
+  }).catch(e => console.error(e))
 })
 
 onUnmounted(() => {
@@ -476,6 +564,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-weight: 500;
+  width: 100%;
+  overflow: hidden;
+}
+
+.task-name span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .source-project-link {
@@ -525,6 +623,14 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.empty-wrapper {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
 }
 
 .task-card {
@@ -636,5 +742,116 @@ onUnmounted(() => {
 
 .no-project-tip {
   margin-top: 8px;
+}
+/* 弹窗内容样式 */
+.create-form {
+  padding-right: 8px;
+  overflow-x: hidden;
+}
+
+.form-section {
+  background: #fcfcfc;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+:deep(.el-dialog__body) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+:deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+:deep(.el-form-item__label) {
+  font-weight: 500;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 弹窗紧凑样式 */
+.ant-dialog :deep(.el-dialog__body) {
+  padding: 12px 24px;
+}
+
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.compact-form :deep(.el-form-item__label) {
+  padding-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.form-section {
+  background: #ffffff;
+  border: 1px solid var(--border-split);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+  line-height: 1;
+}
+
+.compact-item {
+  margin-top: -4px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.compact-radio :deep(.el-radio) {
+  margin-right: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 0;
 }
 </style>

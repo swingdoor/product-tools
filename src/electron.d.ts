@@ -88,6 +88,8 @@ export interface AnalysisTask {
   updatedAt: string
   errorMessage?: string
   progress?: AnalysisProgress
+  knowledgeRefMode?: 'none' | 'auto' | 'manual'
+  knowledgeRefDocs?: string[]
 }
 
 // 市场报告类型
@@ -109,6 +111,8 @@ export interface MarketReport {
   updatedAt: string
   errorMessage?: string
   progress?: MarketProgress
+  knowledgeRefMode?: 'none' | 'auto' | 'manual'
+  knowledgeRefDocs?: string[]
 }
 
 // 设计文档类型
@@ -132,6 +136,8 @@ export interface DesignDoc {
   updatedAt: string
   errorMessage?: string
   progress?: DesignDocProgress
+  knowledgeRefMode?: 'none' | 'auto' | 'manual'
+  knowledgeRefDocs?: string[]
 }
 
 export interface PrototypeProject {
@@ -147,6 +153,8 @@ export interface PrototypeProject {
   updatedAt: string
   errorMessage?: string
   progress?: GenerateProgress
+  knowledgeRefMode?: 'none' | 'auto' | 'manual'
+  knowledgeRefDocs?: string[]
 }
 
 interface DbResult<T> {

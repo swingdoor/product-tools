@@ -167,6 +167,10 @@ class KnowledgeService {
         knowledgeRepo.updateTags(docId, tags)
     }
 
+    deleteGlobalTag(tag: string) {
+        knowledgeRepo.deleteTagGlobally(tag)
+    }
+
     // 4. 预览文档 (返回完整文本和HTML内容)
     async previewDocument(docId: string) {
         const doc = knowledgeRepo.getDoc(docId)

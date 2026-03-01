@@ -1,6 +1,7 @@
 import { analysisService } from '../services/analysisService'
 import { systemRepo } from '../db/repositories/systemRepo'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from '../services/taskRunner'
+import { buildKnowledgeContext } from '../utils/knowledgeContext'
 import { logger } from '../logger'
 
 /** 执行分析任务 */
@@ -18,9 +19,25 @@ export async function executeAnalysisTask(
     try {
         systemRepo.addLog({ taskId, type: 'generate_step', message: '正在分析产品需求...', timestamp: new Date().toISOString() })
 
+        const task = analysisService.getById(taskId)
+        let finalInputContent = inputContent
+        if (task) {
+            logger.info(moduleName, `配置知识引用模式: ${task.knowledgeRefMode || '未设置'}, 手动文档数: ${task.knowledgeRefDocs?.length || 0}`)
+            const knowledgeContext = await buildKnowledgeContext(
+                taskId,
+                task.knowledgeRefMode,
+                task.knowledgeRefDocs,
+                inputContent.substring(0, 500),
+                (msg) => { systemRepo.addLog({ taskId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() }) }
+            )
+            if (knowledgeContext) {
+                finalInputContent += `\n\n[知识库参考资料]:\n${knowledgeContext}`
+            }
+        }
+
         // 调用 AI 分析
         const result = await callAnalysisAIWithHeartbeat(
-            inputContent, apiKey, baseUrl, model, taskId, taskState, prompts?.['product-analysis']
+            finalInputContent, apiKey, baseUrl, model, taskId, taskState, prompts?.['product-analysis']
         )
 
         if (taskState.cancelled) return
@@ -73,6 +90,13 @@ ${inputContent}
             analysisService.updateHeartbeat(taskId)
         }
     }, HEARTBEAT_INTERVAL_MS)
+
+    logger.info('ProductAnalysis', '===== 提交给 LLM 的完整输入 =====')
+    if (systemPrompt && systemPrompt.trim()) {
+        logger.info('ProductAnalysis', '[System Prompt]:\n' + systemPrompt.trim())
+    }
+    logger.info('ProductAnalysis', '[User Prompt]:\n' + prompt)
+    logger.info('ProductAnalysis', '====================================')
 
     try {
         const response = await fetch(`${baseUrl}/chat/completions`, {

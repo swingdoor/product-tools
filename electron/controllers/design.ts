@@ -4,6 +4,7 @@ import { generatePageDesignWithHeartbeat } from '../services/ai'
 import type { TaskState } from '../services/taskRunner'
 import type { DesignDoc } from '../../src/electron.d'
 import type { PrototypeProject } from '../../src/electron.d'
+import { buildKnowledgeContext } from '../utils/knowledgeContext'
 import { logger } from '../logger'
 
 /** 执行设计文档生成任务 */
@@ -24,6 +25,17 @@ export async function executeDesignDocTask(
     let resultContent = `# ${doc.title}\n\n> 基于原型项目「${project.title}」自动生成\n> 生成时间：${new Date().toISOString().replace('T', ' ').slice(0, 19)}\n\n---\n\n`
 
     try {
+        logger.info(moduleName, `配置知识引用模式: ${doc.knowledgeRefMode || '未设置'}, 手动文档数: ${doc.knowledgeRefDocs?.length || 0}`)
+
+        const knowledgeContext = await buildKnowledgeContext(
+            docId,
+            doc.knowledgeRefMode,
+            doc.knowledgeRefDocs,
+            `${project.title} ${project.data?.appName || ''}`,
+            (msg) => { systemRepo.addLog({ taskId: docId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() }) }
+        )
+        const knowledgePromptExtension = knowledgeContext ? `\n\n[设计参考知识]:\n${knowledgeContext}` : ''
+
         for (let i = 0; i < totalPages; i++) {
             if (taskState.cancelled) return
 
@@ -48,8 +60,9 @@ export async function executeDesignDocTask(
             })
 
             // 生成单个页面的设计说明
+            const systemPrompt = prompts?.['design-doc']
             const pageDesign = await generatePageDesignWithHeartbeat(
-                page, apiKey, baseUrl, model, docId, taskState, prompts?.['design-doc']
+                page, apiKey, baseUrl, model, docId, taskState, systemPrompt, knowledgePromptExtension
             )
 
             if (taskState.cancelled) return

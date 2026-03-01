@@ -64,6 +64,8 @@ export const useDesignDocStore = defineStore('designDoc', () => {
     sourceProjectId: string
     sourceProjectTitle: string
     pageCount?: number
+    knowledgeRefMode?: 'none' | 'auto' | 'manual'
+    knowledgeRefDocs?: string[]
   }): Promise<{ task: DesignDoc | null; error?: string }> {
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
 
@@ -74,6 +76,8 @@ export const useDesignDocStore = defineStore('designDoc', () => {
       sourceProjectId: data.sourceProjectId,
       sourceProjectTitle: data.sourceProjectTitle,
       pageCount: data.pageCount || 0,
+      knowledgeRefMode: data.knowledgeRefMode || 'none',
+      knowledgeRefDocs: data.knowledgeRefDocs || [],
       createdAt: now,
       updatedAt: now
     }
@@ -101,6 +105,8 @@ export const useDesignDocStore = defineStore('designDoc', () => {
       sourceProjectId: task.sourceProjectId,
       sourceProjectTitle: task.sourceProjectTitle,
       pageCount: task.pageCount,
+      knowledgeRefMode: task.knowledgeRefMode,
+      knowledgeRefDocs: task.knowledgeRefDocs,
       resultContent: task.resultContent,
       createdAt: task.createdAt,
       updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),

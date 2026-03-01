@@ -128,8 +128,8 @@ const isEditing = ref(false)
 const editContent = ref('')
 const report = ref<MarketReport | null>(null)
 
-// 是否有未保存的修改
 const hasChanges = computed(() => {
+  if (!isEditing.value) return false
   return editContent.value !== (report.value?.resultContent || '')
 })
 

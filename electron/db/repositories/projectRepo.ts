@@ -6,6 +6,7 @@ export const projectRepo = {
         const rows = db.prepare('SELECT * FROM prototype_projects ORDER BY createdAt DESC').all() as any[]
         return rows.map(row => ({
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             data: fromDB<PrototypeData>(row.data),
             versions: fromDB<PrototypeVersion[]>(row.versions) || [],
             progress: fromDB<GenerateProgress>(row.progress)
@@ -17,6 +18,7 @@ export const projectRepo = {
         if (!row) return undefined
         return {
             ...row,
+            knowledgeRefDocs: row.knowledgeRefDocs ? fromDB<string[]>(row.knowledgeRefDocs) : undefined,
             data: fromDB<PrototypeData>(row.data),
             versions: fromDB<PrototypeVersion[]>(row.versions) || [],
             progress: fromDB<GenerateProgress>(row.progress)
@@ -26,8 +28,8 @@ export const projectRepo = {
     save(project: PrototypeProject): PrototypeProject {
         const stmt = db.prepare(`
       INSERT OR REPLACE INTO prototype_projects (
-        id, title, status, clientType, sourceAnalysisId, analysisContent, data, versions, createdAt, updatedAt, errorMessage, progress
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, title, status, clientType, sourceAnalysisId, analysisContent, data, versions, knowledgeRefMode, knowledgeRefDocs, createdAt, updatedAt, errorMessage, progress
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
         stmt.run(
             project.id,
@@ -38,6 +40,8 @@ export const projectRepo = {
             project.analysisContent,
             toDB(project.data),
             toDB(project.versions),
+            project.knowledgeRefMode || null,
+            toDB(project.knowledgeRefDocs),
             project.createdAt,
             project.updatedAt,
             project.errorMessage || null,

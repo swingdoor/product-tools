@@ -2,6 +2,7 @@ import { projectService } from '../services/projectService'
 import { systemRepo } from '../db/repositories/systemRepo'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from '../services/taskRunner'
 import { buildPrompt, getCanvasInfoByClientType, AIType } from '../services/ai'
+import { buildKnowledgeContext } from '../utils/knowledgeContext'
 import { logger } from '../logger'
 
 /** 执行生成任务 */
@@ -18,11 +19,23 @@ export async function executeGenerateTask(
     const moduleName = 'PrototypeGen'
     logger.info(moduleName, `开始执行生成任务 | ID: ${projectId}`)
     try {
+        const currentProject = projectService.getById(projectId)
+        logger.info(moduleName, `配置知识引用模式: ${currentProject?.knowledgeRefMode || '未设置'}, 手动文档数: ${currentProject?.knowledgeRefDocs?.length || 0}`)
+
+        const knowledgeContext = await buildKnowledgeContext(
+            projectId,
+            currentProject?.knowledgeRefMode,
+            currentProject?.knowledgeRefDocs,
+            analysisContent.substring(0, 500),
+            (msg) => { systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: msg, timestamp: new Date().toISOString() }) }
+        )
+        const knowledgePromptExtension = knowledgeContext ? `\n\n[相关参考知识]:\n${knowledgeContext}` : ''
+
         // 第一步：规划页面
         systemRepo.addLog({ taskId: projectId, type: 'generate_step', message: '步骤1：正在规划页面架构...', timestamp: new Date().toISOString() })
         const planRaw = await callAIWithHeartbeat(
             'prototype-plan',
-            { analysisContent, clientType },
+            { analysisContent, clientType, knowledgePromptExtension },
             apiKey, baseUrl, model,
             projectId, taskState,
             prompts?.['prototype-plan']
@@ -143,6 +156,13 @@ async function callAIWithHeartbeat(
             projectService.updateProgress(projectId, { lastHeartbeat: new Date().toISOString() })
         }
     }, HEARTBEAT_INTERVAL_MS)
+
+    logger.info('PrototypeGen', '===== 提交给 LLM 的完整输入 =====')
+    if (systemPrompt && systemPrompt.trim()) {
+        logger.info('PrototypeGen', '[System Prompt]:\n' + systemPrompt.trim())
+    }
+    logger.info('PrototypeGen', '[User Prompt]:\n' + prompt)
+    logger.info('PrototypeGen', '====================================')
 
     try {
         const response = await fetch(`${baseUrl}/chat/completions`, {

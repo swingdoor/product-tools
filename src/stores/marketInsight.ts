@@ -66,6 +66,8 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
     focusAreas: string[]
     dataSources: string
     deepSearch?: boolean
+    knowledgeRefMode?: 'none' | 'auto' | 'manual'
+    knowledgeRefDocs?: string[]
   }): Promise<{ task: MarketReport | null; error?: string }> {
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
 
@@ -78,6 +80,8 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
       focusAreas: [...data.focusAreas],
       dataSources: data.dataSources,
       deepSearch: data.deepSearch,
+      knowledgeRefMode: data.knowledgeRefMode || 'none',
+      knowledgeRefDocs: data.knowledgeRefDocs || [],
       createdAt: now,
       updatedAt: now
     }
@@ -106,6 +110,8 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
       focusAreas: [...(report.focusAreas || [])],
       dataSources: report.dataSources,
       deepSearch: report.deepSearch,
+      knowledgeRefMode: report.knowledgeRefMode,
+      knowledgeRefDocs: report.knowledgeRefDocs,
       resultContent: report.resultContent,
       createdAt: report.createdAt,
       updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),

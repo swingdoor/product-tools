@@ -4,6 +4,7 @@ import { designDocService } from './designDocService'
 import { TaskState, HEARTBEAT_INTERVAL_MS } from './taskRunner'
 
 export type AIType = 'market-insight' | 'product-analysis' | 'prototype-plan' | 'prototype-page'
+import { ClientTypes } from '../../src/constants/clientTypes'
 
 export interface AICallParams {
   type: AIType
@@ -13,6 +14,8 @@ export interface AICallParams {
   model?: string
   systemPrompt?: string
 }
+
+import { logger } from '../logger'
 
 export function buildPrompt(type: AIType, payload: Record<string, unknown>): string {
   switch (type) {
@@ -26,24 +29,30 @@ export function buildPrompt(type: AIType, payload: Record<string, unknown>): str
       const focusStr = focusAreas?.length ? `\n- 核心关注方向：${focusAreas.join('、')}` : ''
       const targetStr = targetUsers ? `\n- 目标用户群体：${targetUsers}` : ''
       const dataStr = dataSources ? `\n- 参考数据源：\n${dataSources}` : ''
-      return `请为以下行业生成一份详细的市场洞察报告：\n- 行业/领域：${industry}${targetStr}${focusStr}${dataStr}\n\n报告要求：结构完整、数据详实、分析深入，使用Markdown格式，包含执行摘要、各维度详细分析和战略建议。`
+      return `请为以下行业生成一份详细的市场洞察报告：\n- 行业/领域：${industry}${targetStr}${focusStr}${dataStr}\n\n请严格遵循系统设定（System Prompt）中定义的报告结构与分析标准完成撰写。`
     }
     case 'product-analysis': {
       const { reportContent } = payload as { reportContent: string }
-      return `基于以下市场洞察报告，请生成详细的产品需求分析方案：\n\n${reportContent}\n\n分析要求：请按以下结构输出（使用Markdown格式）：\n1. **产品定位**：目标用户、核心价值、差异化定位\n2. **需求清单**：以表格形式列出（优先级P0/P1/P2、需求描述、用户场景、价值点）\n3. **功能模块**：核心功能架构和模块划分\n4. **差异化优势**：相比竞品的核心差异点\n5. **设计方案**：关键交互设计和用户体验要点\n6. **可行性分析**：技术可行性、商业可行性、风险评估`
+      return `基于以下市场洞察报告，请生成详细的产品需求分析方案：\n\n${reportContent}\n\n请严格按系统设定（System Prompt）中定义的产品规范约束进行推导和结构输出。`
     }
 
     case 'prototype-plan': {
-      const { analysisContent, clientType } = payload as { analysisContent: string; clientType: string }
+      const { analysisContent, clientType, knowledgePromptExtension } = payload as { analysisContent: string; clientType: string; knowledgePromptExtension?: string }
       const canvasInfo = getCanvasInfoByClientType(clientType)
-      return `基于以下产品需求分析方案，规划产品原型的页面架构：
+      let basePrompt = `基于以下产品需求分析方案，规划产品原型的页面架构：
 
 ${analysisContent}
 
 【客户端类型】：${clientType}
 【画布规格】：${canvasInfo.desc}
 
-请分析产品需求，规划需要设计的完整页面列表，并为每个页面提供详细描述。
+请分析产品需求，规划需要设计的完整页面列表，并为每个页面提供详细描述。`
+
+      if (knowledgePromptExtension) {
+        basePrompt += knowledgePromptExtension
+      }
+
+      return basePrompt + `
 
 输出格式（严格JSON）：
 {
@@ -75,31 +84,15 @@ ${analysisContent}
       }
 
       const canvasInfo = getCanvasInfoByClientType(clientType)
-      return `为产品“${appName}”生成第 ${pageIndex + 1}/${totalPages} 个页面的完整 HTML 代码。
+      return `为产品“${appName}”设计并生成页面的完整 HTML 代码。
 
-【页面信息】
+【页面基本信息】
 - 页面名称：${page.name}
 - 页面描述：${page.description}
+- 目标设备：${clientType}
 
-【客户端类型】：${clientType}
-【页面尺寸】：${canvasInfo.width}×${canvasInfo.height}px
-
-【设计规范】：
-- 主色：#165DFF，背景：#F5F7FA，卡片：#FFFFFF，主文字：#1D2129，次文字：#4E5969
-- 统一字体：-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
-- 圆角：8px，阴影：0 2px 8px rgba(0,0,0,0.08)
-${canvasInfo.layoutGuide}
-
-【输出要求】：
-1. 生成完整的 HTML 文件，包含 <!DOCTYPE html>、<html>、<head>、<body>
-2. 所有样式写在 <style> 标签内，不使用外部 CSS
-3. 使用语义化 HTML5 标签（header, nav, main, section, footer 等）
-4. 页面内容完整，包含所有描述中的功能区域
-5. 使用占位符图片（绘制矩形+文字提示）
-6. 添加 hover 状态、过渡动画提升交互体验
-7. 页面底部添加导航链接到其他页面（使用 # + 页面名称作为 href）
-
-只输出 HTML 代码，不要包含任何解释或 markdown 标记。`
+请严格遵循系统设定（System Prompt）中的代码框架、排版原则与约束规范完成页面编写。
+只需直接输出包含 \`<!DOCTYPE html>\` 结构的完整源代码，不要包含任何 markdown 代码块标记，不要多余解释。`
     }
     default:
       return ''
@@ -107,44 +100,19 @@ ${canvasInfo.layoutGuide}
 }
 
 export function getCanvasInfoByClientType(clientType: string): { width: number; height: number; desc: string; layoutGuide: string } {
-  switch (clientType) {
-    case '移动端（iOS/Android）':
-      return {
-        width: 390,
-        height: 844,
-        desc: '390×844px（iPhone 14标准尺寸）',
-        layoutGuide: '- 布局特点：顶部状态栏44px，底部导航栏83px，内容区竖向排列，全宽组件'
-      }
-    case '平板端（iPad）':
-      return {
-        width: 1024,
-        height: 1366,
-        desc: '1024×1366px（iPad Pro 12.9寸）',
-        layoutGuide: '- 布局特点：可使用分栏布局，左侧导航200px，右侧内容区'
-      }
-    case '桌面客户端':
-      return {
-        width: 1440,
-        height: 900,
-        desc: '1440×900px（标准桌面端）',
-        layoutGuide: '- 布局特点：顶部导航栏60px，左侧侧边栏220px，主内容区，右侧属性栏（可选）'
-      }
-    case '小程序':
-      return {
-        width: 375,
-        height: 812,
-        desc: '375×812px（微信小程序标准尺寸）',
-        layoutGuide: '- 布局特点：顶部自定义导航44px，底部tabbar50px，内容区竖向排列'
-      }
-    case 'Web端':
-    default:
-      return {
-        width: 1280,
-        height: 900,
-        desc: '1280×900px（标准Web端）',
-        layoutGuide: '- 布局特点：顶部导航栏60px，左侧侧边栏220px，主内容区填充剩余宽度'
-      }
+  const typeKey = clientType as keyof typeof ClientTypes;
+  if (ClientTypes[typeKey]) {
+    return ClientTypes[typeKey];
   }
+
+  // Fallback map for older deprecated string values from history
+  if (clientType === '移动端（iOS/Android）') return ClientTypes.App;
+  if (clientType === '平板端（iPad）') return ClientTypes.Pad;
+  if (clientType === '桌面客户端' || clientType === 'Web端') return ClientTypes.Web;
+  if (clientType === '小程序') return ClientTypes.MiniProgram;
+
+  // Default fallback
+  return ClientTypes.Web;
 }
 
 /** 调用 AI 生成市场报告（带心跳） */
@@ -177,6 +145,13 @@ ${dataSourcesText}
       marketService.updateHeartbeat(reportId)
     }
   }, HEARTBEAT_INTERVAL_MS)
+
+  logger.info('MarketInsight', '===== 提交给 LLM 的完整输入 =====')
+  if (systemPrompt && systemPrompt.trim()) {
+    logger.info('MarketInsight', '[System Prompt]:\n' + systemPrompt.trim())
+  }
+  logger.info('MarketInsight', '[User Prompt]:\n' + prompt)
+  logger.info('MarketInsight', '====================================')
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -260,6 +235,13 @@ export async function callAIWithHeartbeat(
     }
   }, HEARTBEAT_INTERVAL_MS)
 
+  logger.info('AI', '===== 提交给 LLM 的完整输入 =====')
+  if (systemPrompt && systemPrompt.trim()) {
+    logger.info('AI', '[System Prompt]:\n' + systemPrompt.trim())
+  }
+  logger.info('AI', '[User Prompt]:\n' + prompt)
+  logger.info('AI', '====================================')
+
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -330,36 +312,24 @@ export async function generatePageDesignWithHeartbeat(
   model: string | undefined,
   docId: string,
   taskState: TaskState,
-  systemPrompt?: string
+  systemPrompt?: string,
+  knowledgePromptExtension?: string
 ): Promise<string> {
-  const prompt = `你是一位专业的产品设计师，请根据以下 HTML 页面代码，生成该页面的功能设计说明文档。
+  let prompt = `请根据以下前端代码和页面信息，进行反向工程分析，输出详细的《页面组件及技术需求规格书》。
 
 **页面名称**: ${page.name}
 **页面描述**: ${page.description}
 
-**HTML 代码**:
+**来源HTML代码**:
 \`\`\`html
 ${page.htmlContent}
 \`\`\`
 
-请输出包含以下内容的 Markdown 格式文档：
+请严格遵照系统设定（System Prompt）中定义的技术维度和输出框架完成你的推演分析。`
 
-### 页面概述
-简要描述页面的主要用途和在产品中的位置
-
-### 功能点清单
-列出页面包含的所有功能点
-
-### 交互逻辑说明
-详细说明用户交互流程和各元素的交互行为
-
-### 数据字段说明
-列出页面涉及的数据字段及其类型、用途
-
-### 异常状态处理
-说明各种异常场景的处理方式
-
-请确保内容专业、结构清晰、实用性强。`
+  if (knowledgePromptExtension) {
+    prompt += knowledgePromptExtension
+  }
 
   const heartbeatTimer = setInterval(() => {
     if (!taskState.cancelled) {
@@ -368,6 +338,13 @@ ${page.htmlContent}
       })
     }
   }, HEARTBEAT_INTERVAL_MS)
+
+  logger.info('DesignDoc', '===== 提交给 LLM 的完整输入 =====')
+  if (systemPrompt && systemPrompt.trim()) {
+    logger.info('DesignDoc', '[System Prompt]:\n' + systemPrompt.trim())
+  }
+  logger.info('DesignDoc', '[User Prompt]:\n' + prompt)
+  logger.info('DesignDoc', '====================================')
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -378,7 +355,12 @@ ${page.htmlContent}
       },
       body: JSON.stringify({
         model: model || 'deepseek-reasoner',
-        messages: [{ role: 'user', content: prompt }],
+        messages: systemPrompt && systemPrompt.trim()
+          ? [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ]
+          : [{ role: 'user', content: prompt }],
         stream: true,
         temperature: 0.7
       })

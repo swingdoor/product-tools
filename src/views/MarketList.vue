@@ -3,7 +3,6 @@
     <!-- 顶部工具栏 -->
     <header class="page-header">
       <div class="header-left">
-        <h1 class="page-title">市场洞察</h1>
         <span class="task-count">共 {{ marketStore.tasks.length }} 份报告</span>
       </div>
       <div class="header-right">
@@ -50,7 +49,7 @@
         @row-click="handleRowClick"
         v-loading="marketStore.loading"
       >
-        <el-table-column prop="title" label="报告标题" min-width="200">
+        <el-table-column prop="title" label="报告标题" width="340">
           <template #default="{ row }">
             <div class="report-name">
               <el-icon v-if="row.status === 'generating'" class="rotating" color="#165DFF"><Loading /></el-icon>
@@ -63,7 +62,15 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="industry" label="行业领域" width="180" />
+        <el-table-column prop="industry" label="行业领域" width="160" />
+        <el-table-column label="引用知识" width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.knowledgeRefDocs?.length" class="ref-docs-text">
+              {{ getRefDocsNames(row.knowledgeRefDocs) }}
+            </span>
+            <span v-else class="no-ref-text">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)" size="small" effect="light">
@@ -71,7 +78,11 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="170" />
+        <el-table-column prop="createdAt" label="创建时间" width="170">
+          <template #default="{ row }">
+            {{ formatDate(row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
@@ -182,6 +193,10 @@
               {{ getStatusText(row.status) }}
             </el-tag>
             <el-tag v-if="row.deepSearch" size="small" type="warning" plain>Deep Research</el-tag>
+            <span v-if="row.knowledgeRefDocs?.length" class="card-ref-info">
+              <el-icon><Document /></el-icon>
+              知识: {{ row.knowledgeRefDocs.length }}
+            </span>
           </div>
 
           <!-- 第三行：详情和日期 -->
@@ -189,67 +204,103 @@
             <div class="focus-areas" v-if="row.focusAreas && row.focusAreas.length">
               关注：{{ row.focusAreas.join('、') }}
             </div>
-            <div class="card-date">{{ row.createdAt }}</div>
+            <div class="card-date">{{ formatDate(row.createdAt) }}</div>
           </div>
         </div>
-        <el-empty v-if="!filteredTasks.length" description="暂无报告" />
+        <div v-if="!filteredTasks.length" class="empty-wrapper">
+          <el-empty description="暂无报告" />
+        </div>
       </div>
     </main>
 
-    <!-- 新建报告弹窗 -->
-    <el-dialog v-model="showCreateDialog" title="新建市场洞察报告" width="600px" @closed="resetForm">
-      <el-form :model="createForm" label-position="top">
-        <el-form-item label="报告标题">
-          <el-input v-model="createForm.title" placeholder="输入报告标题（留空则自动生成）" maxlength="50" show-word-limit />
-        </el-form-item>
-        <el-form-item label="行业 / 领域" required>
-          <el-input
-            v-model="createForm.industry"
-            placeholder="例如：AI教育、新能源汽车、跨境电商..."
-            maxlength="50"
-            show-word-limit
-          />
-        </el-form-item>
-        <el-form-item label="目标用户群体">
-          <el-select
-            v-model="createForm.targetUsersList"
-            placeholder="选择或输入目标用户（可多选）"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            style="width:100%"
-          >
-            <el-option v-for="u in targetUserOptions" :key="u" :label="u" :value="u" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="核心关注方向">
-          <el-checkbox-group v-model="createForm.focusAreas">
-            <el-checkbox v-for="area in focusAreaOptions" :key="area" :label="area">{{ area }}</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-        <el-form-item label="Deep Research (联网检索)">
-          <div class="search-toggle-desc">
-            <el-switch v-model="createForm.deepSearch" active-text="开启联网搜素" />
-            <span class="tip-text">启用后将实时从互联网获取行业动态，分析更准确但耗时稍长。</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="参考数据源 (可选)">
-          <el-input
-            v-model="createForm.dataSources"
-            type="textarea"
-            placeholder="粘贴参考资料、数据摘要或补充背景信息..."
-            :rows="3"
-            maxlength="2000"
-            show-word-limit
-          />
-        </el-form-item>
+    <!-- 新建任务弹窗 -->
+    <el-dialog v-model="showCreateDialog" title="新建市场洞察任务" width="680px" @closed="resetForm" :close-on-click-modal="false" class="ant-dialog">
+      <el-form :model="createForm" label-position="top" class="compact-form">
+        <div class="form-section">
+          <div class="section-title">基础配置</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="任务名称">
+                <el-input v-model="createForm.title" placeholder="输入任务标题（自动生成）" maxlength="50" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="行业 / 领域" required>
+                <el-input v-model="createForm.industry" placeholder="如：新能源汽车、AI教育" maxlength="50" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          
+          <el-form-item label="目标用户群体">
+            <el-select
+              v-model="createForm.targetUsersList"
+              placeholder="请选择或输入目标用户（可多选）"
+              multiple
+              filterable
+              allow-create
+              style="width:100%"
+            >
+              <el-option v-for="u in targetUserOptions" :key="u" :label="u" :value="u" />
+            </el-select>
+          </el-form-item>
+        </div>
+
+        <div class="form-section">
+          <div class="section-title">报告配置与参考</div>
+          <el-form-item label="核心关注方向">
+            <el-checkbox-group v-model="createForm.focusAreas">
+              <el-checkbox v-for="area in focusAreaOptions" :key="area" :label="area">{{ area }}</el-checkbox>
+            </el-checkbox-group>
+          </el-form-item>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="联网搜索 (Deep Research)">
+                <el-switch v-model="createForm.deepSearch" size="small" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="引用知识库">
+                <el-radio-group v-model="createForm.knowledgeRefMode" size="small" class="compact-radio">
+                  <el-radio value="none">不引用</el-radio>
+                  <el-radio value="auto">自动</el-radio>
+                  <el-radio value="manual">手动</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-form-item v-if="createForm.knowledgeRefMode === 'manual'" class="compact-item">
+            <el-select
+              v-model="createForm.knowledgeRefDocs"
+              multiple
+              filterable
+              placeholder="选择知识库文档..."
+              style="width: 100%"
+            >
+              <el-option v-for="doc in availableDocs" :key="doc.id" :label="doc.filename" :value="doc.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="自定义背景/数据源 (可选)">
+            <el-input
+              v-model="createForm.dataSources"
+              type="textarea"
+              placeholder="粘贴参考资料、背景内容等..."
+              :rows="2"
+              maxlength="2000"
+              resize="none"
+            />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
+        <div class="dialog-footer">
         <el-button @click="showCreateDialog = false">取消</el-button>
         <el-button type="primary" :disabled="!canCreate" :loading="creating" @click="handleCreate">
           创建并开始生成
         </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -262,6 +313,7 @@ import { ElMessage, ElNotification } from 'element-plus'
 import { Plus, Loading, Search, Menu, Grid } from '@element-plus/icons-vue'
 import { useMarketInsightStore, type MarketReport, type TaskStatus } from '@/stores/marketInsight'
 import { useSettingsStore } from '@/stores/settings'
+import { knowledgeApi } from '@/api/knowledgeApi'
 
 const router = useRouter()
 const marketStore = useMarketInsightStore()
@@ -286,8 +338,12 @@ const createForm = ref({
   targetUsersList: [] as string[],
   focusAreas: [] as string[],
   dataSources: '',
-  deepSearch: true // 默认开启
+  deepSearch: true, // 默认开启
+  knowledgeRefMode: 'none' as 'none' | 'auto' | 'manual',
+  knowledgeRefDocs: [] as string[]
 })
+
+const availableDocs = ref<any[]>([])
 
 // 预设选项
 const targetUserOptions = ['企业决策者', 'B端客户', 'C端用户', '开发者', '创业者', '投资人', '产品经理']
@@ -324,9 +380,34 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
   return map[status] || 'info'
 }
 
+function formatDate(dateStr: string) {
+  if (!dateStr) return '-'
+  try {
+    const date = new Date(dateStr)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return dateStr
+  }
+}
+
 function getStatusText(status: TaskStatus): string {
   const map = { pending: '待提交', generating: '执行中', completed: '已完成', failed: '失败' }
   return map[status] || '未知'
+}
+
+// 获取引用文档名称列表
+function getRefDocsNames(docIds?: string[]): string {
+  if (!docIds || docIds.length === 0) return '-'
+  return docIds
+    .map(id => availableDocs.value.find(d => d.id === id)?.filename)
+    .filter(name => !!name)
+    .join(', ')
 }
 
 function getRowClassName({ row }: { row: MarketReport }): string {
@@ -335,7 +416,10 @@ function getRowClassName({ row }: { row: MarketReport }): string {
 
 // 重置表单
 function resetForm() {
-  createForm.value = { title: '', industry: '', targetUsersList: [], focusAreas: [], dataSources: '', deepSearch: true }
+  createForm.value = { 
+    title: '', industry: '', targetUsersList: [], focusAreas: [], dataSources: '', 
+    deepSearch: true, knowledgeRefMode: 'none', knowledgeRefDocs: [] 
+  }
 }
 
 // 创建报告
@@ -364,7 +448,9 @@ async function handleCreate() {
       targetUsers,
       focusAreas,
       dataSources: String(createForm.value.dataSources || ''),
-      deepSearch: !!createForm.value.deepSearch
+      deepSearch: !!createForm.value.deepSearch,
+      knowledgeRefMode: createForm.value.knowledgeRefMode,
+      knowledgeRefDocs: [...createForm.value.knowledgeRefDocs]
     })
 
     console.log('[MarketList] Task created result:', { task, createError })
@@ -467,6 +553,11 @@ onMounted(async () => {
   if (marketStore.generatingCount > 0) {
     startPolling()
   }
+  knowledgeApi.getList().then(res => {
+    if (res.success && res.data) {
+      availableDocs.value = res.data
+    }
+  }).catch(e => console.error(e))
 })
 
 onUnmounted(() => {
@@ -542,6 +633,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-weight: 500;
+  width: 100%;
+  overflow: hidden;
+}
+
+.report-name span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .search-badge {
@@ -571,6 +672,14 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.empty-wrapper {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
 }
 
 .task-card {
@@ -644,6 +753,7 @@ onUnmounted(() => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .card-date {
@@ -662,8 +772,82 @@ onUnmounted(() => {
   padding: 8px 12px;
 }
 
-@keyframes rotating {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.rotating {
+  animation: rotating 1s linear infinite;
+}
+
+.ref-docs-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.no-ref-text {
+  color: var(--text-tertiary);
+}
+
+.card-ref-info {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 弹窗紧凑样式 */
+.ant-dialog :deep(.el-dialog__body) {
+  padding: 12px 24px;
+}
+
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.compact-form :deep(.el-form-item__label) {
+  padding-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.form-section {
+  background: #ffffff;
+  border: 1px solid var(--border-split);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+  line-height: 1;
+}
+
+.compact-item {
+  margin-top: -4px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.compact-radio :deep(.el-radio) {
+  margin-right: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 0;
 }
 </style>

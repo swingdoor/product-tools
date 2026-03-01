@@ -64,6 +64,8 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
     sourceReportId?: string
     sourceReportTitle?: string
     inputContent: string
+    knowledgeRefMode?: 'none' | 'auto' | 'manual'
+    knowledgeRefDocs?: string[]
   }): Promise<AnalysisTask | null> {
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
     const newTask: AnalysisTask = {
@@ -73,6 +75,8 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
       sourceReportId: data.sourceReportId,
       sourceReportTitle: data.sourceReportTitle,
       inputContent: data.inputContent,
+      knowledgeRefMode: data.knowledgeRefMode || 'none',
+      knowledgeRefDocs: data.knowledgeRefDocs || [],
       createdAt: now,
       updatedAt: now
     }

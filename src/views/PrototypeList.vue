@@ -3,7 +3,6 @@
     <!-- 顶部标题栏 -->
     <header class="page-header">
       <div class="header-left">
-        <h1 class="page-title">产品原型</h1>
         <span class="task-count">共 {{ prototypeStore.tasks.length }} 个任务</span>
       </div>
       <div class="header-right">
@@ -26,12 +25,14 @@
 
     <!-- 任务列表表格 -->
     <main class="task-list-container">
-      <el-empty v-if="!prototypeStore.tasks.length" description="暂无原型任务，点击「新建任务」开始创建">
-        <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon>
-          新建任务
-        </el-button>
-      </el-empty>
+      <div v-if="!prototypeStore.tasks.length" class="empty-wrapper">
+        <el-empty description="暂无原型任务，点击「新建任务」开始创建">
+          <el-button type="primary" @click="showCreateDialog = true">
+            <el-icon><Plus /></el-icon>
+            新建任务
+          </el-button>
+        </el-empty>
+      </div>
 
       <!-- 表格视图 -->
       <el-table
@@ -42,9 +43,11 @@
         class="task-table"
         @row-click="handleRowClick"
       >
-        <el-table-column prop="title" label="任务名称" min-width="160">
+        <el-table-column prop="title" label="任务名称" width="340">
           <template #default="{ row }">
-            <span class="task-name">{{ row.title }}</span>
+            <div class="task-name">
+              <span>{{ row.title }}</span>
+            </div>
           </template>
         </el-table-column>
 
@@ -64,7 +67,20 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="updatedAt" label="更新时间" width="170" />
+        <el-table-column label="引用知识" width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.knowledgeRefDocs?.length" class="ref-docs-text">
+              {{ getRefDocsNames(row.knowledgeRefDocs) }}
+            </span>
+            <span v-else class="no-ref-text">-</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="updatedAt" label="更新时间" width="170">
+          <template #default="{ row }">
+            {{ formatDate(row.updatedAt) }}
+          </template>
+        </el-table-column>
 
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
@@ -190,10 +206,14 @@
 
           <!-- 第二行：关联信息和状态 -->
           <div class="card-meta">
-            <el-tag size="small" type="primary" plain>{{ row.clientType }}</el-tag>
+            <el-tag size="small" type="primary" plain>{{ getClientTypeLabel(row.clientType) }}</el-tag>
             <el-tag :type="getStatusType(row.status)" size="small" effect="light">
               {{ getStatusText(row.status) }}
             </el-tag>
+            <span v-if="row.knowledgeRefDocs?.length" class="card-ref-info">
+              <el-icon><Document /></el-icon>
+              知识: {{ row.knowledgeRefDocs.length }}
+            </span>
           </div>
 
           <!-- 第三行：需求描述和日期 -->
@@ -201,55 +221,93 @@
             <div class="card-desc" v-if="row.analysisContent">
               {{ row.analysisContent.substring(0, 80) }}...
             </div>
-            <div class="card-date">{{ row.updatedAt }}</div>
+            <div class="card-date">{{ formatDate(row.updatedAt) }}</div>
           </div>
         </div>
       </div>
     </main>
 
     <!-- 新建任务弹窗 -->
-    <el-dialog
-      v-model="showCreateDialog"
-      title="新建原型任务"
-      width="600px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="createForm" label-position="top" class="create-form">
-        <el-form-item label="任务名称" required>
-          <el-input
-            v-model="createForm.title"
-            placeholder="输入任务名称，如：电商APP原型"
-            maxlength="50"
-            show-word-limit
-          />
-        </el-form-item>
+    <el-dialog v-model="showCreateDialog" title="新建原型任务" width="680px" :close-on-click-modal="false" class="ant-dialog">
+      <el-form :model="createForm" label-position="top" class="compact-form">
+        <div class="form-section">
+          <div class="section-title">基础配置</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="任务名称" required>
+                <el-input v-model="createForm.title" placeholder="如：电商APP原型" maxlength="50" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="客户端类型" required>
+                <el-select v-model="createForm.clientType" style="width: 100%">
+                  <el-option label="Web (PC端)" value="Web" />
+                  <el-option label="App (移动端)" value="App" />
+                  <el-option label="小程序" value="MiniProgram" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
-        <el-form-item label="产品需求分析">
-          <el-select
-            v-model="createForm.sourceAnalysisId"
-            placeholder="选择已有的需求分析（可选）"
-            style="width: 100%"
-            clearable
-            @change="onSelectAnalysis"
-          >
-            <el-option
-              v-for="task in analysisStore.tasks.filter(t => t.status === 'completed' && t.resultContent)"
-              :key="task.id"
-              :value="task.id"
-              :label="task.title"
+        <div class="form-section">
+          <div class="section-title">需求与参考</div>
+          <el-form-item label="产品需求分析 (可选)">
+            <el-select
+              v-model="createForm.sourceAnalysisId"
+              placeholder="选择已有的需求分析"
+              style="width: 100%"
+              clearable
+              @change="onSelectAnalysis"
+            >
+              <el-option
+                v-for="task in analysisStore.tasks.filter(t => t.status === 'completed' && t.resultContent)"
+                :key="task.id"
+                :value="task.id"
+                :label="task.title"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="任务需求描述" required>
+            <el-input
+              v-model="createForm.analysisContent"
+              type="textarea"
+              :rows="3"
+              placeholder="描述功能模块、页面结构、交互逻辑等..."
+              resize="none"
             />
-          </el-select>
-          <div class="form-tip">选择后将自动填充需求描述</div>
-        </el-form-item>
+          </el-form-item>
 
-        <el-form-item label="任务需求描述" required>
-          <el-input
-            v-model="createForm.analysisContent"
-            type="textarea"
-            :rows="6"
-            placeholder="详细描述产品需求，包括功能模块、页面结构、交互逻辑等..."
-          />
-        </el-form-item>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="引用知识库">
+                <el-radio-group v-model="createForm.knowledgeRefMode" size="small" class="compact-radio">
+                  <el-radio value="none">不引用</el-radio>
+                  <el-radio value="auto">自动检索</el-radio>
+                  <el-radio value="manual">手动选择</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-form-item v-if="createForm.knowledgeRefMode === 'manual'" class="compact-item">
+            <el-select
+              v-model="createForm.knowledgeRefDocs"
+              multiple
+              filterable
+              placeholder="请选择知识库文档..."
+              style="width: 100%"
+            >
+              <el-option
+                v-for="doc in availableDocs"
+                :key="doc.id"
+                :label="doc.filename"
+                :value="doc.id"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
       </el-form>
 
       <template #footer>
@@ -273,6 +331,8 @@ import { Plus, Loading, Menu, Grid } from '@element-plus/icons-vue'
 import { useProductPrototypeStore, type PrototypeProject, type TaskStatus } from '@/stores/productPrototype'
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
 import { useSettingsStore } from '@/stores/settings'
+import { knowledgeApi } from '@/api/knowledgeApi'
+import { ClientTypes, type ClientTypeKey } from '@/constants/clientTypes'
 
 const router = useRouter()
 const prototypeStore = useProductPrototypeStore()
@@ -313,6 +373,11 @@ onMounted(async () => {
   if (prototypeStore.generatingCount > 0) {
     startPolling()
   }
+  knowledgeApi.getList().then(res => {
+    if (res.success && res.data) {
+      availableDocs.value = res.data
+    }
+  }).catch(e => console.error(e))
 })
 
 onUnmounted(() => {
@@ -325,11 +390,17 @@ const createForm = ref({
   title: '',
   clientType: 'Web端',
   sourceAnalysisId: '',
-  analysisContent: ''
+  analysisContent: '',
+  knowledgeRefMode: 'none' as 'none' | 'auto' | 'manual',
+  knowledgeRefDocs: [] as string[]
 })
+
+// 知识库文档
+const availableDocs = ref<any[]>([])
 
 const canCreate = computed(() =>
   createForm.value.title.trim().length > 0 &&
+  createForm.value.clientType &&
   createForm.value.analysisContent.trim().length > 0
 )
 
@@ -344,6 +415,22 @@ function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 
   return map[status]
 }
 
+function formatDate(dateStr: string) {
+  if (!dateStr) return '-'
+  try {
+    const date = new Date(dateStr)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return dateStr
+  }
+}
+
 function getStatusText(status: TaskStatus): string {
   const map: Record<TaskStatus, string> = {
     pending: '待提交',
@@ -354,9 +441,26 @@ function getStatusText(status: TaskStatus): string {
   return map[status]
 }
 
+function getClientTypeLabel(type: string): string {
+  const key = type as ClientTypeKey;
+  if (ClientTypes[key]) {
+    return ClientTypes[key].label;
+  }
+  return type || 'Web端';
+}
+
 function truncateText(text: string, maxLen: number): string {
   if (!text) return ''
   return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
+}
+
+// 获取引用文档名称列表
+function getRefDocsNames(docIds?: string[]): string {
+  if (!docIds || docIds.length === 0) return '-'
+  return docIds
+    .map(id => availableDocs.value.find(d => d.id === id)?.filename)
+    .filter(name => !!name)
+    .join(', ')
 }
 
 // 选择需求分析
@@ -377,7 +481,9 @@ function resetForm() {
     title: '',
     clientType: 'Web端',
     sourceAnalysisId: '',
-    analysisContent: ''
+    analysisContent: '',
+    knowledgeRefMode: 'none',
+    knowledgeRefDocs: []
   }
 }
 
@@ -390,6 +496,8 @@ async function handleCreateOnly() {
     clientType: createForm.value.clientType,
     sourceAnalysisId: createForm.value.sourceAnalysisId,
     analysisContent: createForm.value.analysisContent.trim(),
+    knowledgeRefMode: createForm.value.knowledgeRefMode,
+    knowledgeRefDocs: [...createForm.value.knowledgeRefDocs],
     data: null
   })
 
@@ -407,6 +515,8 @@ async function handleCreateAndGenerate() {
     clientType: createForm.value.clientType,
     sourceAnalysisId: createForm.value.sourceAnalysisId,
     analysisContent: createForm.value.analysisContent.trim(),
+    knowledgeRefMode: createForm.value.knowledgeRefMode,
+    knowledgeRefDocs: [...createForm.value.knowledgeRefDocs],
     data: null
   })
 
@@ -521,8 +631,20 @@ function goToView(id: string) {
 }
 
 .task-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 500;
-  color: var(--text-primary);
+  width: 100%;
+  overflow: hidden;
+}
+
+.task-name span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .task-desc {
@@ -541,6 +663,14 @@ function goToView(id: string) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.empty-wrapper {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
 }
 
 .task-card {
@@ -614,6 +744,7 @@ function goToView(id: string) {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .card-date {
@@ -655,5 +786,117 @@ function goToView(id: string) {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+/* 弹窗内容样式 */
+.create-form {
+  padding-right: 8px;
+  overflow-x: hidden;
+}
+
+.form-section {
+  background: #fcfcfc;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.client-type-group {
+  width: 100%;
+}
+.client-type-group :deep(.el-radio-button__inner) {
+  width: 156px;
+}
+
+:deep(.el-dialog__body) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+:deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+:deep(.el-form-item__label) {
+  font-weight: 500;
+}
+/* 弹窗紧凑样式 */
+.ant-dialog :deep(.el-dialog__body) {
+  padding: 12px 24px;
+}
+
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.compact-form :deep(.el-form-item__label) {
+  padding-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.form-section {
+  background: #ffffff;
+  border: 1px solid var(--border-split);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+  line-height: 1;
+}
+
+.compact-item {
+  margin-top: -4px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.compact-radio :deep(.el-radio) {
+  margin-right: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 0;
 }
 </style>
