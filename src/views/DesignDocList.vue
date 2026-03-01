@@ -249,7 +249,9 @@ async function handleCreate() {
     showCreateDialog.value = false
     // 立即启动
     const settings = settingsStore.settings
-    await designDocStore.startTask(doc.task.id, settings.apiKey, settings.baseUrl, settings.model)
+    await designDocStore.startTask(
+      doc.task.id
+    )
     startPolling()
     ElMessage.success('文档已创建，开始生成中...')
     createForm.value = { sourceProjectId: '', title: '' }
@@ -263,7 +265,9 @@ async function handleSubmit(doc: DesignDoc) {
   }
 
   const settings = settingsStore.settings
-  const result = await designDocStore.startTask(doc.id, settings.apiKey, settings.baseUrl, settings.model)
+  const result = await designDocStore.startTask(
+    doc.id
+  )
   if (result.success) {
     ElMessage.success('已提交生成任务')
     startPolling()
@@ -335,7 +339,6 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {
@@ -344,7 +347,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 20px 24px;
   background: var(--bg-white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-split);
 }
 
 .header-left {

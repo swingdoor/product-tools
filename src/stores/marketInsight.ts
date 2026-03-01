@@ -143,15 +143,10 @@ export const useMarketInsightStore = defineStore('marketInsight', () => {
   /** 启动任务 */
   async function startTask(
     reportId: string,
-    apiKey: string,
-    baseUrl: string,
-    model?: string,
-    prompts?: Record<string, string>,
-    searchConfig?: { enabled: boolean; sources: string[] }
+    searchConfig?: { enabled: boolean }
   ): Promise<{ success: boolean; error?: string }> {
-    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
     const cleanSearchConfig = searchConfig ? JSON.parse(JSON.stringify(searchConfig)) : undefined
-    const result = await marketApi.start(reportId, apiKey, baseUrl, model, cleanPrompts, cleanSearchConfig)
+    const result = await marketApi.start(reportId, cleanSearchConfig)
     if (result.success) {
       await loadReport(reportId)
     }

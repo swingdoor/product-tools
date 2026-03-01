@@ -271,7 +271,6 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {

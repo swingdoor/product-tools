@@ -62,6 +62,18 @@ const router = createRouter({
       meta: { title: '设计文档查看' }
     },
     {
+      path: '/knowledge-base',
+      name: 'KnowledgeBase',
+      component: () => import('@/views/KnowledgeBaseList.vue'),
+      meta: { title: '文档管理' }
+    },
+    {
+      path: '/knowledge-base/preview/:id',
+      name: 'KnowledgePreview',
+      component: () => import('@/views/KnowledgePreview.vue'),
+      meta: { title: '文档预览' }
+    },
+    {
       path: '/settings',
       name: 'Settings',
       component: () => import('@/views/Settings.vue'),

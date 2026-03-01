@@ -282,14 +282,9 @@ async function handleCreate() {
     console.log('[MarketList] Task created result:', { task, createError })
     
     if (task) {
-      const settings = settingsStore.settings
       const result = await marketStore.startTask(
         task.id,
-        settings.apiKey,
-        settings.baseUrl,
-        settings.model,
-        settings.prompts,
-        settings.searchConfig
+        settingsStore.settings.searchConfig
       )
       
       if (result.success) {
@@ -316,22 +311,21 @@ async function handleSubmit(task: MarketReport) {
     ElNotification.warning({ title: '请先配置AI', message: '前往"设置"配置API Key', duration: 3000 })
     return
   }
+  try {
+    const result = await marketStore.startTask(
+      task.id,
+      settingsStore.settings.searchConfig
+    )
 
-  const settings = settingsStore.settings
-  const result = await marketStore.startTask(
-    task.id,
-    settings.apiKey,
-    settings.baseUrl,
-    settings.model,
-    settings.prompts,
-    settings.searchConfig
-  )
-
-  if (result.success) {
-    ElMessage.success('已提交生成')
-    startPolling()
-  } else {
-    ElMessage.error(result.error || '启动生成失败')
+    if (result.success) {
+      ElMessage.success('已提交生成')
+      startPolling()
+    } else {
+      ElMessage.error(result.error || '启动生成失败')
+    }
+  } catch (err: any) {
+    console.error('重新提交报告异常:', err)
+    ElMessage.error(`重新提交报告时发生错误: ${err.message || String(err)}`)
   }
 }
 
@@ -397,7 +391,6 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {
@@ -406,7 +399,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 20px 24px;
   background: var(--bg-white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-split);
 }
 
 .header-left {

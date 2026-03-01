@@ -297,6 +297,11 @@ async function regeneratePage() {
   isRegenerating.value = true
 
   try {
+    const project = currentProject.value
+    if (!project) {
+      throw new Error('项目信息缺失')
+    }
+
     const htmlRaw = await new Promise<string>((resolve, reject) => {
       let result = ''
       window.electronAPI.onAiStreamChunk((data) => { result += data.chunk })
@@ -304,13 +309,13 @@ async function regeneratePage() {
       window.electronAPI.onAiStreamError((data) => reject(new Error(data.error)))
       window.electronAPI.aiCall({
         type: 'prototype-page',
-        payload: { customPrompt: editablePrompt.value },
-        apiKey: settingsStore.settings.apiKey,
-        baseUrl: settingsStore.settings.baseUrl,
-        model: settingsStore.settings.model,
-        systemPrompt: settingsStore.settings.prompts?.['prototype-page']
+        payload: { customPrompt: editablePrompt.value }
       })
     })
+
+    if (!htmlRaw) {
+      throw new Error('生成内容为空')
+    }
 
     let htmlContent = htmlRaw
     const htmlMatch = htmlRaw.match(/```html\s*([\s\S]*?)\s*```/)
@@ -322,8 +327,9 @@ async function regeneratePage() {
 
     ElMessage.success('页面重新生成成功')
     viewMode.value = 'preview'
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '重新生成失败')
+  } catch (err: any) {
+    console.error('重新生成失败:', err)
+    ElMessage.error(`重新生成失败: ${err.message || String(err)}`)
   } finally {
     isRegenerating.value = false
     window.electronAPI.removeAiListeners()
@@ -336,7 +342,6 @@ async function regeneratePage() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {

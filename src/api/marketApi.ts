@@ -7,7 +7,7 @@ export const marketApi = {
     saveReport: (report: MarketReport) => invokeApi<MarketReport>(() => window.electronAPI.marketSaveReport(report)),
     deleteReport: (id: string) => invokeApi<boolean>(() => window.electronAPI.marketDeleteReport(id)),
     getLogs: (taskId: string) => invokeApi<TaskLog[]>(() => window.electronAPI.marketGetLogs(taskId)),
-    start: (reportId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>, searchConfig?: { enabled: boolean; sources: string[] }) =>
-        invokeApi<void>(() => window.electronAPI.marketStart(reportId, apiKey, baseUrl, model, prompts, searchConfig)),
+    start: (reportId: string, searchConfig?: { enabled: boolean }) =>
+        invokeApi<void>(() => window.electronAPI.marketStart(reportId, searchConfig)),
     cancel: (reportId: string) => invokeApi<void>(() => window.electronAPI.marketCancel(reportId)),
 }

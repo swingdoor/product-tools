@@ -117,14 +117,9 @@ export const useProductAnalysisStore = defineStore('productAnalysis', () => {
 
   /** 启动分析任务 */
   async function startTask(
-    taskId: string,
-    apiKey: string,
-    baseUrl: string,
-    model?: string,
-    prompts?: Record<string, string>
+    taskId: string
   ): Promise<{ success: boolean; error?: string }> {
-    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await analysisApi.start(taskId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await analysisApi.start(taskId)
     if (result.success) {
       // 刷新任务状态
       await loadTask(taskId)

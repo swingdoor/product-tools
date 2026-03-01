@@ -8,8 +8,8 @@ export const projectApi = {
     deleteProject: (id: string) => invokeApi<boolean>(() => window.electronAPI.dbDeleteProject(id)),
     getLogs: (taskId: string) => invokeApi<TaskLog[]>(() => window.electronAPI.dbGetLogs(taskId)),
     addLog: (log: TaskLogInput) => invokeApi<TaskLog>(() => window.electronAPI.dbAddLog(log)),
-    startGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-        invokeApi<void>(() => window.electronAPI.taskStartGenerate(projectId, apiKey, baseUrl, model, prompts)),
+    startGenerate: (projectId: string) =>
+        invokeApi<void>(() => window.electronAPI.taskStartGenerate(projectId)),
     cancelGenerate: (projectId: string) => invokeApi<void>(() => window.electronAPI.taskCancel(projectId)),
     updateProgress: (id: string, progress: Partial<GenerateProgress>) => invokeApi<PrototypeProject>(() => window.electronAPI.dbUpdateProgress(id, progress)),
     updateStatusProgress: (id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) =>

@@ -25,9 +25,8 @@ export async function executeMarketTask(
 
         // 如果开启了 Deep Research、有行业信息、并且 searchConfig 已启用
         if (report.deepSearch && report.industry && searchConfig?.enabled) {
-            const sourceList = (searchConfig.sources || ['bing_cn']).join(', ')
-            logger.info(moduleName, '启动 Deep Research...', `Sources: ${sourceList}`)
-            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: `🚀 启动 Deep Research：正在从 [${sourceList}] 检索实时信息...`, timestamp: new Date().toISOString() })
+            logger.info(moduleName, '启动 Deep Research...')
+            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: `🚀 启动 Deep Research：正在从 Web 检索实时行业信息...`, timestamp: new Date().toISOString() })
 
             const keywords = [report.industry, ...(report.focusAreas || [])].slice(0, 3).join(' ')
 
@@ -51,8 +50,8 @@ export async function executeMarketTask(
                 systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ Deep Research 未能获取到额外信息，将使用大模型内置知识', timestamp: new Date().toISOString() })
             }
         } else if (report.deepSearch && !searchConfig?.enabled) {
-            logger.warn(moduleName, 'Deep Research 开启但未配置数据源')
-            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ 已勾选"联网搜索"但未在设置中启用任何数据源，将使用大模型内置知识', timestamp: new Date().toISOString() })
+            logger.warn(moduleName, 'Deep Research 开启但全局设置中未启用')
+            systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '⚠️ 已在任务中勾选"联网搜索"，但【全局设置 - 联网搜索配置】未开启，将使用大模型内置知识', timestamp: new Date().toISOString() })
         } else {
             logger.info(moduleName, '使用 AI 直接分析市场...')
             systemRepo.addLog({ taskId: reportId, type: 'generate_step', message: '正在根据现有资料进行市场分析...', timestamp: new Date().toISOString() })

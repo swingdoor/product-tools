@@ -399,16 +399,8 @@ async function startGenerate() {
   const projectId = currentProject.value?.id
   if (!projectId) return
 
-  const settings = settingsStore.settings
-  
   // 调用后端启动任务
-  const result = await prototypeStore.startTask(
-    projectId,
-    settings.apiKey,
-    settings.baseUrl,
-    settings.model,
-    settings.prompts
-  )
+  const result = await prototypeStore.startTask(projectId)
   
   if (result.success) {
     ElMessage.success('任务已启动，正在后台生成...')
@@ -425,7 +417,6 @@ async function startGenerate() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {

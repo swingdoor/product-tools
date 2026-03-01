@@ -267,13 +267,8 @@ async function handleCreate() {
 
   if (task) {
     // 立即启动分析
-    const settings = settingsStore.settings
     const result = await analysisStore.startTask(
-      task.id,
-      settings.apiKey,
-      settings.baseUrl,
-      settings.model,
-      settings.prompts
+      task.id
     )
 
     if (result.success) {
@@ -301,20 +296,19 @@ async function handleSubmit(task: AnalysisTask) {
     return
   }
 
-  const settings = settingsStore.settings
-  const result = await analysisStore.startTask(
-    task.id,
-    settings.apiKey,
-    settings.baseUrl,
-    settings.model,
-    settings.prompts
-  )
+  try {
+    const result = await analysisStore.startTask(
+      task.id
+    )
 
-  if (result.success) {
-    ElMessage.success('已提交分析')
-    startPolling()
-  } else {
-    ElMessage.error(result.error || '启动分析失败')
+    if (result.success) {
+      ElMessage.success('已提交分析')
+      startPolling()
+    } else {
+      ElMessage.error(result.error || '启动分析失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '启动分析失败')
   }
 }
 
@@ -374,7 +368,6 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {
@@ -383,7 +376,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 20px 24px;
   background: var(--bg-white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-split);
 }
 
 .header-left {

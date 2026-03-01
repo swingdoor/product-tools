@@ -57,8 +57,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── 后台任务执行 ─────────────────────────────────────────
   /** 启动原型生成任务（后端执行） */
-  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-    ipcRenderer.invoke('task:start-generate', { projectId, apiKey, baseUrl, model, prompts }),
+  taskStartGenerate: (projectId: string) =>
+    ipcRenderer.invoke('task:start-generate', { projectId }),
   /** 取消任务 */
   taskCancel: (projectId: string) => ipcRenderer.invoke('task:cancel', projectId),
 
@@ -74,8 +74,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取分析任务日志 */
   analysisGetLogs: (taskId: string) => ipcRenderer.invoke('analysis:get-logs', taskId),
   /** 启动分析任务 */
-  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-    ipcRenderer.invoke('analysis:start', { taskId, apiKey, baseUrl, model, prompts }),
+  analysisStart: (taskId: string) =>
+    ipcRenderer.invoke('analysis:start', { taskId }),
   /** 取消分析任务 */
   analysisCancel: (taskId: string) => ipcRenderer.invoke('analysis:cancel', taskId),
 
@@ -91,8 +91,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取市场报告日志 */
   marketGetLogs: (taskId: string) => ipcRenderer.invoke('market:get-logs', taskId),
   /** 启动市场报告生成 */
-  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>, searchConfig?: { enabled: boolean; sources: string[] }) =>
-    ipcRenderer.invoke('market:start', { reportId, apiKey, baseUrl, model, prompts, searchConfig }),
+  marketStart: (reportId: string, searchConfig?: { enabled: boolean }) =>
+    ipcRenderer.invoke('market:start', { reportId, searchConfig }),
   /** 取消市场报告生成 */
   marketCancel: (reportId: string) => ipcRenderer.invoke('market:cancel', reportId),
 
@@ -108,8 +108,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取设计文档日志 */
   designGetLogs: (taskId: string) => ipcRenderer.invoke('design:get-logs', taskId),
   /** 启动设计文档生成 */
-  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-    ipcRenderer.invoke('design:start', { docId, apiKey, baseUrl, model, prompts }),
+  designStart: (docId: string) =>
+    ipcRenderer.invoke('design:start', { docId }),
   /** 取消设计文档生成 */
   designCancel: (docId: string) => ipcRenderer.invoke('design:cancel', docId),
 
@@ -122,6 +122,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dataClearPrototype: () => ipcRenderer.invoke('data:clear-prototype'),
   /** 清除所有设计文档 */
   dataClearDesign: () => ipcRenderer.invoke('data:clear-design'),
+
+  // ── 文档管理 (Knowledge Base) ────────────────────────────
+  knowledgeSelectFile: () => ipcRenderer.invoke('knowledge:selectFile'),
+  knowledgeGetList: () => ipcRenderer.invoke('knowledge:getList'),
+  knowledgeUpload: (params: { sourcePath: string; filename: string; type: string; size: number; embeddingConfig: { apiKey: string; baseUrl: string; model: string } }) =>
+    ipcRenderer.invoke('knowledge:upload', params),
+  knowledgeDelete: (docId: string) => ipcRenderer.invoke('knowledge:delete', docId),
+  knowledgePreview: (docId: string) => ipcRenderer.invoke('knowledge:preview', docId),
+  knowledgeSearchSemantic: (params: { query: string; type: 'semantic' | 'keyword'; embeddingConfig?: { apiKey: string; baseUrl: string; model: string } }) =>
+    ipcRenderer.invoke('knowledge:searchSemantic', params),
+  knowledgeUpdateTags: (params: { docId: string; tags: string[] }) =>
+    ipcRenderer.invoke('knowledge:updateTags', params),
+  knowledgeOpenPdfWindow: (filePath: string) => ipcRenderer.invoke('knowledge:openPdfWindow', filePath),
 
   // ── 应用配置 ───────────────────────────────────────
   /** 获取配置文件物理路径 */

@@ -7,7 +7,7 @@ export const analysisApi = {
     saveTask: (task: AnalysisTask) => invokeApi<AnalysisTask>(() => window.electronAPI.analysisSaveTask(task)),
     deleteTask: (id: string) => invokeApi<boolean>(() => window.electronAPI.analysisDeleteTask(id)),
     getLogs: (taskId: string) => invokeApi<TaskLog[]>(() => window.electronAPI.analysisGetLogs(taskId)),
-    start: (taskId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-        invokeApi<void>(() => window.electronAPI.analysisStart(taskId, apiKey, baseUrl, model, prompts)),
+    start: (taskId: string) =>
+        invokeApi<void>(() => window.electronAPI.analysisStart(taskId)),
     cancel: (taskId: string) => invokeApi<void>(() => window.electronAPI.analysisCancel(taskId)),
 }

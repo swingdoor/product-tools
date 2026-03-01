@@ -5,26 +5,45 @@ import { TaskLog } from '../../../src/electron.d'
 // 配置持久化 Store (SQLite)
 // ────────────────────────────────────────────────────────────
 
+export interface APIProvider {
+    id: string
+    name: string
+    baseUrl: string
+    apiKey: string
+    models: string // 逗号分隔的模型列表
+}
+
 interface ConfigSchema {
     settings: {
-        apiKey: string
-        baseUrl: string
-        model: string
+        providers: APIProvider[]
+        activeLlmProviderId: string
+        activeLlmModel: string
+        activeEmbeddingProviderId: string
+        activeEmbeddingModel: string
         prompts: Record<string, string>
         searchConfig: {
             enabled: boolean
-            sources: string[]
             bochaApiKey: string
         }
     }
 }
 
 const DEFAULT_SETTINGS: ConfigSchema['settings'] = {
-    apiKey: '',
-    baseUrl: 'https://api.deepseek.com/v1',
-    model: 'deepseek-reasoner',
+    providers: [
+        {
+            id: 'default',
+            name: '默认配置 (DeepSeek)',
+            baseUrl: 'https://api.deepseek.com/v1',
+            apiKey: '',
+            models: 'deepseek-chat,deepseek-reasoner'
+        }
+    ],
+    activeLlmProviderId: 'default',
+    activeLlmModel: 'deepseek-reasoner',
+    activeEmbeddingProviderId: 'default',
+    activeEmbeddingModel: 'deepseek-chat',
     prompts: {},
-    searchConfig: { enabled: false, sources: ['bing_cn'], bochaApiKey: '' }
+    searchConfig: { enabled: false, bochaApiKey: '' }
 }
 
 export const systemRepo = {
@@ -86,5 +105,23 @@ export const systemRepo = {
         const stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)')
         stmt.run('current_settings', toDB(settings))
         return settings
+    },
+
+    resolveLlmConfig(settings: ConfigSchema['settings']): { apiKey: string; baseUrl: string; model: string } {
+        const provider = settings.providers.find(p => p.id === settings.activeLlmProviderId) || settings.providers[0]
+        return {
+            apiKey: provider?.apiKey || '',
+            baseUrl: provider?.baseUrl || 'https://api.deepseek.com/v1',
+            model: settings.activeLlmModel || provider?.models.split(',')[0] || ''
+        }
+    },
+
+    resolveEmbeddingConfig(settings: ConfigSchema['settings']): { apiKey: string; baseUrl: string; model: string } {
+        const provider = settings.providers.find(p => p.id === settings.activeEmbeddingProviderId) || settings.providers[0]
+        return {
+            apiKey: provider?.apiKey || '',
+            baseUrl: provider?.baseUrl || 'https://api.deepseek.com/v1',
+            model: settings.activeEmbeddingModel || provider?.models.split(',')[0] || ''
+        }
     }
 }

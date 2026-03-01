@@ -61,11 +61,13 @@
 
       <!-- 路由页面 -->
       <div class="page-body">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <div class="page-wrapper">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
       </div>
     </main>
   </div>
@@ -84,7 +86,8 @@ const navItems: { path: string; label: string; icon: string; tag: string | null;
   { path: '/market-insight', label: '市场洞察', icon: 'TrendCharts', tag: 'DeepResearch' },
   { path: '/product-analysis', label: '需求分析', icon: 'Document', tag: null },
   { path: '/product-prototype', label: '产品原型', icon: 'Grid', tag: null },
-  { path: '/design-doc', label: '设计文档', icon: 'Notebook', tag: null }
+  { path: '/design-doc', label: '设计文档', icon: 'Notebook', tag: null },
+  { path: '/knowledge-base', label: '文档管理', icon: 'FolderOpened', tag: null }
 ]
 
 const currentPath = computed(() => route.path)
@@ -114,40 +117,41 @@ const currentTag = computed(() => {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   background: var(--bg-white);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-split);
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-sm);
   z-index: 10;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 16px 24px;
   cursor: default;
 }
 .logo-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--primary-lighter);
+  width: 32px;
+  height: 32px;
+  background: var(--primary);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.logo-icon .el-icon {
+  color: #fff !important;
+}
 .logo-text {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 16px 12px;
+  padding: 8px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -156,24 +160,24 @@ const currentTag = computed(() => {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 16px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
-  transition: all 0.15s;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
   position: relative;
   cursor: pointer;
 }
 .nav-item:hover {
-  background: var(--bg);
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
 .nav-item.active {
   background: var(--primary-lighter);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: 500;
 }
 .nav-badge {
   margin-left: auto;
@@ -185,8 +189,8 @@ const currentTag = computed(() => {
 }
 
 .sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid var(--border);
+  padding: 16px;
+  border-top: 1px solid var(--border-split);
 }
 
 /* ── 主内容区 ────────────────────────────────────────────── */
@@ -205,7 +209,7 @@ const currentTag = computed(() => {
   justify-content: space-between;
   padding: 0 24px;
   background: var(--bg-white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-split);
   flex-shrink: 0;
 }
 .header-left {
@@ -230,5 +234,17 @@ const currentTag = computed(() => {
 .page-body {
   flex: 1;
   overflow: hidden;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.page-wrapper {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 </style>

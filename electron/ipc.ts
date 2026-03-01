@@ -15,13 +15,23 @@ import { executeMarketTask } from './controllers/market'
 import { executeAnalysisTask } from './controllers/analysis'
 import { executeGenerateTask } from './controllers/prototype'
 import { executeDesignDocTask } from './controllers/design'
+import { registerKnowledgeHandlers } from './controllers/knowledge'
 
 export function registerIpcHandlers(mainWindow: BrowserWindow) {
+    registerKnowledgeHandlers()
     // ────────────────────────────────────────────────────────────
     // IPC: AI 接口调用
     // ────────────────────────────────────────────────────────────
-    ipcMain.handle('ai:call', async (event, params: AICallParams) => {
-        const { type, payload, apiKey, baseUrl, model, systemPrompt } = params
+    ipcMain.handle('ai:call', async (event, params: Omit<AICallParams, 'apiKey' | 'baseUrl' | 'model' | 'systemPrompt'>) => {
+        const { type, payload } = params
+
+        const settings = systemRepo.getAppSettings()
+        const llmConfig = systemRepo.resolveLlmConfig(settings)
+
+        const apiKey = llmConfig.apiKey
+        const baseUrl = llmConfig.baseUrl
+        const model = llmConfig.model
+        const systemPrompt = settings.prompts[type] || ''
         const prompt = buildPrompt(type as any, payload)
         const messages: any[] = [{ role: 'user', content: prompt }]
 
@@ -139,7 +149,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
         return { success: true, data: analysisService.delete(id) }
     })
     ipcMain.handle('analysis:get-logs', async (_event, taskId: string) => ({ success: true, data: systemRepo.getLogsByTaskId(taskId) }))
-    ipcMain.handle('analysis:start', async (_event, { taskId, apiKey, baseUrl, model, prompts }) => {
+    ipcMain.handle('analysis:start', async (_event, { taskId }) => {
         if (taskManager.isTaskRunning(taskId)) return { success: false, error: '任务已在运行中' }
         const task = analysisService.getById(taskId)
         if (!task) return { success: false, error: '任务不存在' }
@@ -149,7 +159,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
         analysisService.updateStatus(taskId, 'generating', { progress: { lastHeartbeat: new Date().toISOString() } })
         systemRepo.addLog({ taskId, type: 'generate_start', message: '开始分析', timestamp: new Date().toISOString() })
 
-        executeAnalysisTask(taskId, task.inputContent, apiKey, baseUrl, model, taskState, prompts)
+        const settings = systemRepo.getAppSettings()
+        const { apiKey, baseUrl, model } = systemRepo.resolveLlmConfig(settings)
+
+        executeAnalysisTask(taskId, task.inputContent, apiKey, baseUrl, model, taskState, settings.prompts)
             .catch(e => logger.error('IPC', `分析任务执行出错: ${e.message}`, taskId))
             .finally(() => taskManager.unregisterTask(taskId))
         return { success: true }
@@ -171,8 +184,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
     ipcMain.handle('market:save-report', async (_event, report: any) => ({ success: true, data: marketService.save(report) }))
     ipcMain.handle('market:delete-report', async (_event, id: string) => ({ success: true, data: marketService.delete(id) }))
     ipcMain.handle('market:get-logs', async (_event, taskId: string) => ({ success: true, data: systemRepo.getLogsByTaskId(taskId) }))
-    ipcMain.handle('market:start', async (_event, { reportId, apiKey, baseUrl, model, prompts, searchConfig }) => {
-        logger.info('IPC', '收到 market:start 请求', `reportId: ${reportId}, model: ${model}`)
+    ipcMain.handle('market:start', async (_event, { reportId, searchConfig }) => {
+        logger.info('IPC', '收到 market:start 请求', `reportId: ${reportId}`)
         if (taskManager.isTaskRunning(reportId)) return { success: false, error: '任务已在运行中' }
         const report = marketService.getById(reportId)
         if (!report || !report.industry?.trim()) return { success: false, error: '报告不存在或行业为空' }
@@ -181,7 +194,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
         marketService.updateStatus(reportId, 'generating', { progress: { lastHeartbeat: new Date().toISOString() } })
         systemRepo.addLog({ taskId: reportId, type: 'generate_start', message: '开始生成市场报告', timestamp: new Date().toISOString() })
 
-        executeMarketTask(reportId, report, apiKey, baseUrl, model, taskState, prompts, searchConfig)
+        const settings = systemRepo.getAppSettings()
+        const { apiKey, baseUrl, model } = systemRepo.resolveLlmConfig(settings)
+
+        executeMarketTask(reportId, report, apiKey, baseUrl, model, taskState, settings.prompts, searchConfig)
             .catch(e => logger.error('IPC', `市场报告任务执行出错: ${e.message}`, reportId))
             .finally(() => {
                 logger.info('IPC', `市场报告任务结束 | ID: ${reportId}`)
@@ -206,7 +222,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
     ipcMain.handle('design:save-doc', async (_event, doc: any) => ({ success: true, data: designDocService.save(doc) }))
     ipcMain.handle('design:delete-doc', async (_event, id: string) => ({ success: true, data: designDocService.delete(id) }))
     ipcMain.handle('design:get-logs', async (_event, docId: string) => ({ success: true, data: systemRepo.getLogsByTaskId(docId) }))
-    ipcMain.handle('design:start', async (_event, { docId, apiKey, baseUrl, model, prompts }) => {
+    ipcMain.handle('design:start', async (_event, { docId }) => {
         if (taskManager.isTaskRunning(docId)) return { success: false, error: '任务已在运行中' }
         const doc = designDocService.getById(docId)
         const project = doc ? projectService.getById(doc.sourceProjectId) : null
@@ -224,7 +240,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
         })
         systemRepo.addLog({ taskId: docId, type: 'generate_start', message: '开始生成设计文档', timestamp: new Date().toISOString() })
 
-        executeDesignDocTask(docId, doc, project, apiKey, baseUrl, model, taskState, prompts)
+        const settings = systemRepo.getAppSettings()
+        const { apiKey, baseUrl, model } = systemRepo.resolveLlmConfig(settings)
+
+        executeDesignDocTask(docId, doc, project, apiKey, baseUrl, model, taskState, settings.prompts)
             .catch(e => logger.error('IPC', `设计文档任务执行出错: ${e.message}`, docId))
             .finally(() => taskManager.unregisterTask(docId))
         return { success: true }
@@ -241,7 +260,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
     // ────────────────────────────────────────────────────────────
     // IPC: 原型生成 (Prototype Task Case)
     // ────────────────────────────────────────────────────────────
-    ipcMain.handle('task:start-generate', async (_event, { projectId, apiKey, baseUrl, model, prompts }) => {
+    ipcMain.handle('task:start-generate', async (_event, { projectId }) => {
         if (taskManager.isTaskRunning(projectId)) return { success: false, error: '任务已在运行中' }
         const project = projectService.getById(projectId)
         if (!project || !project.analysisContent?.trim()) return { success: false, error: '项目或分析内容为空' }
@@ -257,7 +276,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
         })
         systemRepo.addLog({ taskId: projectId, type: 'generate_start', message: '开始生成原型', timestamp: new Date().toISOString() })
 
-        executeGenerateTask(projectId, project.analysisContent, project.clientType || 'Web端', apiKey, baseUrl, model, taskState, prompts)
+        const settings = systemRepo.getAppSettings()
+        const { apiKey, baseUrl, model } = systemRepo.resolveLlmConfig(settings)
+
+        executeGenerateTask(projectId, project.analysisContent, project.clientType || 'Web端', apiKey, baseUrl, model, taskState, settings.prompts)
             .catch(e => logger.error('IPC', `生成原型任务执行出错: ${e.message}`, projectId))
             .finally(() => {
                 logger.info('IPC', `生成原型任务结束 | ID: ${projectId}`)

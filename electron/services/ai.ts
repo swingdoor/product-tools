@@ -425,3 +425,35 @@ ${page.htmlContent}
     clearInterval(heartbeatTimer)
   }
 }
+
+/** 获取文本向量 Embedding */
+export async function getEmbedding(
+  text: string,
+  apiKey: string,
+  baseUrl: string,
+  model: string
+): Promise<number[]> {
+  const response = await fetch(`${baseUrl}/embeddings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model || 'text-embedding-v3',
+      input: text
+    })
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`Embedding API请求失败: ${response.status} - ${errText}`)
+  }
+
+  const result = await response.json()
+  if (result.data && result.data.length > 0 && result.data[0].embedding) {
+    return result.data[0].embedding
+  }
+  throw new Error('Embedding API返回格式异常')
+}
+

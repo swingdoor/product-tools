@@ -223,14 +223,9 @@ export const useProductPrototypeStore = defineStore('productPrototype', () => {
 
   /** 启动生成任务 */
   async function startTask(
-    projectId: string,
-    apiKey: string,
-    baseUrl: string,
-    model?: string,
-    prompts?: Record<string, string>
+    projectId: string
   ): Promise<{ success: boolean; error?: string }> {
-    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await projectApi.startGenerate(projectId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await projectApi.startGenerate(projectId)
     if (result.success) {
       await loadTask(projectId)
     }

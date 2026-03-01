@@ -7,87 +7,150 @@
         <el-tabs v-model="activeTab" class="settings-tabs">
           <!-- 1. API 配置 -->
           <el-tab-pane label="API 配置" name="api">
+            <!-- 厂商管理 -->
             <el-card shadow="never" class="settings-card">
               <template #header>
                 <div class="card-header">
+                  <el-icon color="#722ED1"><Box /></el-icon>
+                  <span>厂商管理 (API Providers)</span>
+                  <el-button type="primary" link @click="openProviderDialog()">
+                    <el-icon><Plus /></el-icon> 添加厂商
+                  </el-button>
+                </div>
+              </template>
+              
+              <el-table :data="form.providers" style="width: 100%" size="small" border>
+                <el-table-column prop="name" label="厂商名称" width="150" />
+                <el-table-column prop="baseUrl" label="接口地址" show-overflow-tooltip />
+                <el-table-column prop="apiKey" label="API Key">
+                  <template #default="scope">
+                    <span>{{ scope.row.apiKey ? '已配置 (sk-...)' : '未配置' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="可用模型" show-overflow-tooltip>
+                  <template #default="scope">
+                    <el-tag size="small" v-for="m in scope.row.models.split(',')" :key="m" style="margin-right:4px">
+                      {{ m.trim() }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button type="primary" link size="small" @click="openProviderDialog(scope.row)">编辑</el-button>
+                    <el-button type="danger" link size="small" @click="deleteProvider(scope.row.id)" :disabled="form.providers.length <= 1">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <!-- LLM 接口配置 -->
+            <el-card shadow="never" class="settings-card" style="margin-top:20px">
+              <template #header>
+                <div class="card-header">
                   <el-icon color="#165DFF"><Setting /></el-icon>
-                  <span>AI 接口配置</span>
+                  <span>大模型 (LLM) 接口配置</span>
                   <el-tag v-if="settingsStore.isConfigured" type="success" size="small">已配置</el-tag>
                   <el-tag v-else type="warning" size="small">未配置</el-tag>
                 </div>
               </template>
 
               <el-form :model="form" label-position="top" class="settings-form">
-                <el-form-item label="API Key" required>
-                  <el-input
-                    v-model="form.apiKey"
-                    type="password"
-                    show-password
-                    placeholder="sk-..."
-                    clearable
-                  />
-                  <div class="field-hint">您的 AI 服务 API Key，安全存储在本地</div>
-                </el-form-item>
-
-                <el-form-item label="接口地址 (Base URL)" required>
-                  <el-input
-                    v-model="form.baseUrl"
-                    placeholder="https://api.deepseek.com/v1"
-                    clearable
-                  />
-                  <div class="field-hint">OpenAI 兼容接口地址，支持 DeepSeek、OpenAI 等</div>
-                </el-form-item>
-
-                <el-form-item label="模型">
-                  <el-select v-model="form.model" filterable allow-create style="width:100%">
-                    <el-option-group label="DeepSeek">
-                      <el-option label="deepseek-reasoner (R1, 推荐)" value="deepseek-reasoner" />
-                      <el-option label="deepseek-chat (V3)" value="deepseek-chat" />
-                    </el-option-group>
-                    <el-option-group label="OpenAI">
-                      <el-option label="gpt-4o" value="gpt-4o" />
-                      <el-option label="o3-mini" value="o3-mini" />
-                    </el-option-group>
+                <el-form-item label="选择服务厂商" required>
+                  <el-select v-model="form.activeLlmProviderId" placeholder="请选择厂商" style="width:100%">
+                    <el-option
+                      v-for="p in form.providers"
+                      :key="p.id"
+                      :label="p.name"
+                      :value="p.id"
+                    />
                   </el-select>
+                </el-form-item>
+
+                <el-form-item label="选择模型 (Model)" required>
+                  <el-select v-model="form.activeLlmModel" filterable allow-create placeholder="请选择或输入模型代码" style="width:100%">
+                    <el-option
+                      v-for="m in llmModelsList"
+                      :key="m"
+                      :label="m"
+                      :value="m"
+                    />
+                  </el-select>
+                  <div class="field-hint">支持手动输入厂商未收录的模型代码（输入后按回车）</div>
                 </el-form-item>
 
                 <div class="form-actions">
                   <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
                     <el-icon><Check /></el-icon> 保存配置
                   </el-button>
-                  <el-button size="large" @click="testConnection" :loading="testing">
-                    <el-icon><Connection /></el-icon> 测试连接
+                  <el-button size="large" @click="testLlmConnection" :loading="testingLlm">
+                    <el-icon><Connection /></el-icon> 测试 LLM 连接
                   </el-button>
                 </div>
               </el-form>
 
               <el-alert
-                v-if="testResult"
-                :title="testResult.message"
-                :type="testResult.success ? 'success' : 'error'"
+                v-if="testLlmResult"
+                :title="testLlmResult.message"
+                :type="testLlmResult.success ? 'success' : 'error'"
                 :closable="false"
                 show-icon
                 style="margin-top:16px"
               />
             </el-card>
 
+            <!-- Embedding 接口配置 -->
             <el-card shadow="never" class="settings-card" style="margin-top:20px">
               <template #header>
                 <div class="card-header">
-                  <el-icon color="#86909C"><Star /></el-icon>
-                  <span>快捷配置模板</span>
+                  <el-icon color="#10A37F"><Coin /></el-icon>
+                  <span>知识库 Embedding 接口配置</span>
+                  <el-tag v-if="form.activeEmbeddingProviderId" type="success" size="small">已配置</el-tag>
+                  <el-tag v-else type="warning" size="small">未配置</el-tag>
                 </div>
               </template>
-              <div class="templates">
-                <div v-for="tpl in templates" :key="tpl.name" class="template-item" @click="applyTemplate(tpl)">
-                  <div class="template-icon" :style="{ background: tpl.color + '20', color: tpl.color }">{{ tpl.icon }}</div>
-                  <div class="template-info">
-                    <p class="template-name">{{ tpl.name }}</p>
-                    <p class="template-url">{{ tpl.baseUrl }}</p>
-                  </div>
-                  <el-button size="small" type="primary" plain>使用</el-button>
+
+              <el-form :model="form" label-position="top" class="settings-form">
+                <el-form-item label="选择服务厂商" required>
+                  <el-select v-model="form.activeEmbeddingProviderId" placeholder="请选择厂商" style="width:100%">
+                    <el-option
+                      v-for="p in form.providers"
+                      :key="p.id"
+                      :label="p.name"
+                      :value="p.id"
+                    />
+                  </el-select>
+                </el-form-item>
+
+                <el-form-item label="选择模型 (Model)" required>
+                  <el-select v-model="form.activeEmbeddingModel" filterable allow-create placeholder="请选择或输入模型代码" style="width:100%">
+                    <el-option
+                      v-for="m in embeddingModelsList"
+                      :key="m"
+                      :label="m"
+                      :value="m"
+                    />
+                  </el-select>
+                  <div class="field-hint">一般用于 RAG 知识库检索增强，将文本向量化</div>
+                </el-form-item>
+                
+                <div class="form-actions">
+                  <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
+                    <el-icon><Check /></el-icon> 保存配置
+                  </el-button>
+                  <el-button size="large" @click="testEmbeddingConnection" :loading="testingEmbedding">
+                    <el-icon><Connection /></el-icon> 测试 Embedding 连接
+                  </el-button>
                 </div>
-              </div>
+              </el-form>
+
+              <el-alert
+                v-if="testEmbeddingResult"
+                :title="testEmbeddingResult.message"
+                :type="testEmbeddingResult.success ? 'success' : 'error'"
+                :closable="false"
+                show-icon
+                style="margin-top:16px"
+              />
             </el-card>
           </el-tab-pane>
 
@@ -111,20 +174,7 @@
                   <div class="field-hint">开启后，在创建市场洞察报告时勾选「联网搜索」，系统将从网页获取实时信息。</div>
                 </el-form-item>
 
-                <el-form-item v-if="form.searchConfig.enabled" label="数据源">
-                  <div class="source-grid">
-                    <el-checkbox-group v-model="form.searchConfig.sources">
-                      <div class="source-item">
-                        <el-checkbox value="bocha_api" disabled checked>
-                          <div class="source-label">
-                            <span class="source-name">博查 Web Search API</span>
-                            <span class="source-desc">专为 AI Agent 和 RAG 设计的国内合规搜索 API</span>
-                          </div>
-                        </el-checkbox>
-                      </div>
-                    </el-checkbox-group>
-                  </div>
-                </el-form-item>
+
 
                 <el-form-item v-if="form.searchConfig.enabled" label="博查 API Key" required>
                   <el-input
@@ -148,35 +198,47 @@
           <el-tab-pane label="提示词配置" name="prompts">
             <el-card shadow="never" class="settings-card">
               <template #header>
-                <div class="card-header">
-                  <el-icon color="#FF7D00"><ChatLineSquare /></el-icon>
-                  <span>系统提示词 (System Prompts)</span>
-                  <el-button type="primary" link @click="resetPrompts">
-                    <el-icon><Refresh /></el-icon> 恢复默认
-                  </el-button>
+                <div class="card-header" style="justify-content: space-between; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-icon color="#FF7D00"><ChatLineSquare /></el-icon>
+                    <span>系统提示词 (System Prompts)</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <el-button type="primary" link @click="resetPrompts">
+                      <el-icon><Refresh /></el-icon> 恢复默认
+                    </el-button>
+                    <el-button type="primary" @click="saveSettings" :loading="saving">
+                      <el-icon><Check /></el-icon> 保存提示词
+                    </el-button>
+                  </div>
                 </div>
               </template>
               
-              <div class="prompts-list">
-                <div class="prompt-item" v-for="(label, key) in promptLabels" :key="key">
-                  <div class="prompt-header">
-                    <span class="prompt-title">{{ label }}</span>
-                    <span class="prompt-key">{{ key }}</span>
-                  </div>
-                  <el-input
-                    v-model="form.prompts[key]"
-                    type="textarea"
-                    :rows="4"
-                    placeholder="输入系统提示词..."
-                  />
-                </div>
+              <div class="prompts-split-view">
+                <el-tabs
+                  v-model="activePromptTab"
+                  tab-position="left"
+                  class="prompts-tabs"
+                >
+                  <el-tab-pane
+                    v-for="(label, key) in promptLabels"
+                    :key="key"
+                    :label="label"
+                    :name="key"
+                  >
+                    <div class="prompt-editor-container">
+                      <el-input
+                        v-model="form.prompts[key]"
+                        type="textarea"
+                        :rows="23"
+                        placeholder="输入系统提示词..."
+                        class="prompt-textarea"
+                      />
+                    </div>
+                  </el-tab-pane>
+                </el-tabs>
               </div>
 
-              <div class="form-actions" style="margin-top:20px">
-                <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
-                  <el-icon><Check /></el-icon> 保存提示词
-                </el-button>
-              </div>
             </el-card>
           </el-tab-pane>
 
@@ -265,13 +327,57 @@
 
       </div>
     </el-scrollbar>
+
+    <!-- 添加/编辑厂商的 Dialog -->
+    <el-dialog
+      v-model="providerDialogVisible"
+      :title="editingProviderId ? '编辑厂商' : '添加厂商'"
+      width="500px"
+      align-center
+    >
+      <div v-if="!editingProviderId" class="templates" style="margin-bottom: 20px;">
+        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;">从模板快速填充：</div>
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;">
+          <el-button 
+            v-for="tpl in templates" 
+            :key="tpl.name" 
+            size="small" 
+            @click="applyProviderTemplate(tpl)"
+          >
+            {{ tpl.icon }} {{ tpl.name }}
+          </el-button>
+        </div>
+      </div>
+
+      <el-form :model="providerForm" label-position="top">
+        <el-form-item label="厂商名称" required>
+          <el-input v-model="providerForm.name" placeholder="例如：DeepSeek、智谱等" />
+        </el-form-item>
+        <el-form-item label="接口地址 (Base URL)" required>
+          <el-input v-model="providerForm.baseUrl" placeholder="https://api..." />
+        </el-form-item>
+        <el-form-item label="API Key" required>
+          <el-input v-model="providerForm.apiKey" type="password" show-password placeholder="sk-..." />
+        </el-form-item>
+        <el-form-item label="可用模型 (Models)">
+          <el-input v-model="providerForm.models" type="textarea" :rows="2" placeholder="填写模型代码，多个请用英文逗号分隔" />
+          <div class="field-hint">逗号分隔，如：`deepseek-reasoner, deepseek-chat`</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="providerDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveProviderDialog">确认保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useSettingsStore } from '@/stores/settings'
+import { useSettingsStore, type APIProvider } from '@/stores/settings'
 import { useMarketInsightStore } from '@/stores/marketInsight'
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
 import { useProductPrototypeStore } from '@/stores/productPrototype'
@@ -284,44 +390,114 @@ const prototypeStore = useProductPrototypeStore()
 const designDocStore = useDesignDocStore()
 
 const activeTab = ref('api')
-const form = reactive({
-  ...settingsStore.settings,
-  searchConfig: {
-    enabled: settingsStore.settings.searchConfig?.enabled ?? false,
-    sources: ['bocha_api'], // 强制使用 bocha_api
-    bochaApiKey: settingsStore.settings.searchConfig?.bochaApiKey || ''
+const activePromptTab = ref('market-insight')
+// 为了防止 form 深拷贝丢失响应式，先克隆一份
+const form = ref(JSON.parse(JSON.stringify(settingsStore.settings)))
+
+// 模型下拉列表（计算属性）
+const llmModelsList = computed(() => {
+  const provider = form.value.providers.find((p: APIProvider) => p.id === form.value.activeLlmProviderId)
+  return provider && provider.models ? provider.models.split(',').map((s: string) => s.trim()).filter(Boolean) : []
+})
+
+const embeddingModelsList = computed(() => {
+  const provider = form.value.providers.find((p: APIProvider) => p.id === form.value.activeEmbeddingProviderId)
+  return provider && provider.models ? provider.models.split(',').map((s: string) => s.trim()).filter(Boolean) : []
+})
+
+// 当切换 LLM 厂商时，自动选中第一个可用模型
+watch(() => form.value.activeLlmProviderId, (newId, oldId) => {
+  if (oldId && newId !== oldId && llmModelsList.value.length > 0) {
+    form.value.activeLlmModel = llmModelsList.value[0]
+  }
+})
+watch(() => form.value.activeEmbeddingProviderId, (newId, oldId) => {
+  if (oldId && newId !== oldId && embeddingModelsList.value.length > 0) {
+    form.value.activeEmbeddingModel = embeddingModelsList.value[0]
   }
 })
 const saving = ref(false)
-const testing = ref(false)
-const testResult = ref<{ success: boolean; message: string } | null>(null)
+const testingLlm = ref(false)
+const testingEmbedding = ref(false)
+const testLlmResult = ref<{ success: boolean; message: string } | null>(null)
+const testEmbeddingResult = ref<{ success: boolean; message: string } | null>(null)
 const dbPath = ref('')
 const realConfigPath = ref('')
 const configJsonStr = ref('')
+
+// Dialog 相关
+const providerDialogVisible = ref(false)
+const editingProviderId = ref<string | null>(null)
+const providerForm = reactive<APIProvider>({
+  id: '',
+  name: '',
+  baseUrl: '',
+  apiKey: '',
+  models: ''
+})
 
 const searchSources = [
   { id: 'bocha_api', label: '博查 Web Search API', desc: '专为 AI Agent 和 RAG 设计的国内合规搜索 API' }
 ]
 
 const promptLabels: Record<string, string> = {
-  'market-insight': '市场洞察 (Market Insight)',
-  'product-analysis': '需求分析 (Product Analysis)',
-  'prototype-plan': '原型页面规划 (Prototype Plan)',
-  'prototype-page': '单页原型设计 (Prototype Page)',
-  'design-doc': '设计文档 (Design Document)'
+  'market-insight': '市场洞察',
+  'product-analysis': '需求分析',
+  'prototype-plan': '原型页面规划',
+  'prototype-page': '单页原型设计',
+  'design-doc': '设计文档'
 }
 
 const templates = [
-  { name: 'DeepSeek (推荐)', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-reasoner', icon: '🔮', color: '#165DFF' },
-  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', icon: '🤖', color: '#10A37F' },
-  { name: 'Moonshot (月之暗面)', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-128k', icon: '🌙', color: '#722ED1' },
-  { name: 'OpenAI 兼容代理', baseUrl: 'https://your-proxy.com/v1', model: 'deepseek-chat', icon: '🔄', color: '#FF7D00' }
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: 'deepseek-reasoner, deepseek-chat', icon: '🔮', color: '#165DFF' },
+  { name: '阿里百炼', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: 'qwen-max, qwen-plus, qwen-turbo, text-embedding-v3, text-embedding-v2', icon: '☁️', color: '#FF7D00' },
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: 'gpt-4o, o3-mini, text-embedding-3-small, text-embedding-3-large', icon: '🤖', color: '#10A37F' },
+  { name: 'Moonshot', baseUrl: 'https://api.moonshot.cn/v1', models: 'moonshot-v1-128k', icon: '🌙', color: '#722ED1' },
+  { name: 'OpenAI兼容代理', baseUrl: 'https://your-proxy.com/v1', models: 'gpt-4o', icon: '🔄', color: '#FF7D00' }
 ]
 
-function applyTemplate(tpl: typeof templates[0]) {
-  form.baseUrl = tpl.baseUrl
-  form.model = tpl.model
-  ElMessage.success(`已应用 ${tpl.name} 模板，请填写 API Key 后保存`)
+function openProviderDialog(row?: APIProvider) {
+  if (row) {
+    editingProviderId.value = row.id
+    Object.assign(providerForm, row)
+  } else {
+    editingProviderId.value = null
+    Object.assign(providerForm, { id: 'provider_' + Date.now(), name: '', baseUrl: '', apiKey: '', models: '' })
+  }
+  providerDialogVisible.value = true
+}
+
+function applyProviderTemplate(tpl: typeof templates[0]) {
+  providerForm.name = tpl.name
+  providerForm.baseUrl = tpl.baseUrl
+  providerForm.models = tpl.models
+}
+
+function saveProviderDialog() {
+  if (!providerForm.name || !providerForm.baseUrl || !providerForm.apiKey) {
+    ElMessage.warning('名称、接口地址和 API Key 是必填项')
+    return
+  }
+  if (editingProviderId.value) {
+    const idx = form.value.providers.findIndex((p: APIProvider) => p.id === editingProviderId.value)
+    if (idx !== -1) form.value.providers[idx] = { ...providerForm }
+  } else {
+    form.value.providers.push({ ...providerForm })
+  }
+  providerDialogVisible.value = false
+  saveSettings()
+}
+
+function deleteProvider(id: string) {
+  form.value.providers = form.value.providers.filter((p: APIProvider) => p.id !== id)
+  // 如果当前选中的被删除了，选中第一个
+  if (form.value.activeLlmProviderId === id && form.value.providers.length > 0) {
+    form.value.activeLlmProviderId = form.value.providers[0].id
+  }
+  if (form.value.activeEmbeddingProviderId === id && form.value.providers.length > 0) {
+    form.value.activeEmbeddingProviderId = form.value.providers[0].id
+  }
+  saveSettings()
 }
 
 async function saveSettings() {
@@ -329,34 +505,59 @@ async function saveSettings() {
   // 模拟保存延迟
   await new Promise(resolve => setTimeout(resolve, 300))
   
-  await settingsStore.save({ ...form, searchConfig: { ...form.searchConfig, sources: form.searchConfig.sources as any } })
+  await settingsStore.save(JSON.parse(JSON.stringify(form.value)))
   await refreshConfigJson() // 保存后刷新 JSON 预览
   
   saving.value = false
-  testResult.value = null
+  testLlmResult.value = null
   ElMessage.success('配置已保存并同步至 config.json')
 }
 
-async function testConnection() {
-  if (!form.apiKey.trim() || !form.baseUrl.trim()) {
-    ElMessage.warning('请先填写 API Key 和接口地址')
+async function testLlmConnection() {
+  const provider = form.value.providers.find((p: APIProvider) => p.id === form.value.activeLlmProviderId)
+  if (!provider || !provider.apiKey.trim() || !provider.baseUrl.trim()) {
+    ElMessage.warning('LLM 厂商的 API Key 和接口地址未填写')
     return
   }
-  testing.value = true
-  testResult.value = null
+  testingLlm.value = true
+  testLlmResult.value = null
   try {
-    const response = await fetch(`${form.baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${form.apiKey}` }
+    const response = await fetch(`${provider.baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${provider.apiKey}` }
     })
     if (response.ok) {
-      testResult.value = { success: true, message: '连接成功！接口配置正确。' }
+      testLlmResult.value = { success: true, message: '连接成功！接口配置正确。' }
     } else {
-      testResult.value = { success: false, message: `连接失败：HTTP ${response.status} - ${response.statusText}` }
+      testLlmResult.value = { success: false, message: `连接失败：HTTP ${response.status} - ${response.statusText}` }
     }
   } catch (err) {
-    testResult.value = { success: false, message: `连接失败：${err instanceof Error ? err.message : '网络错误'}` }
+    testLlmResult.value = { success: false, message: `连接失败：${err instanceof Error ? err.message : '网络错误'}` }
   } finally {
-    testing.value = false
+    testingLlm.value = false
+  }
+}
+
+async function testEmbeddingConnection() {
+  const provider = form.value.providers.find((p: APIProvider) => p.id === form.value.activeEmbeddingProviderId)
+  if (!provider || !provider.apiKey.trim() || !provider.baseUrl.trim()) {
+    ElMessage.warning('Embedding 厂商的 API Key 和接口地址未填写')
+    return
+  }
+  testingEmbedding.value = true
+  testEmbeddingResult.value = null
+  try {
+    const response = await fetch(`${provider.baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${provider.apiKey}` }
+    })
+    if (response.ok) {
+      testEmbeddingResult.value = { success: true, message: '连接成功！接口配置正确。' }
+    } else {
+      testEmbeddingResult.value = { success: false, message: `连接失败：HTTP ${response.status} - ${response.statusText}` }
+    }
+  } catch (err) {
+    testEmbeddingResult.value = { success: false, message: `连接失败：${err instanceof Error ? err.message : '网络错误'}` }
+  } finally {
+    testingEmbedding.value = false
   }
 }
 
@@ -462,7 +663,7 @@ async function handleClearDesign() {
 
 function resetPrompts() {
   settingsStore.resetPrompts()
-  form.prompts = { ...settingsStore.settings.prompts }
+  form.value.prompts = JSON.parse(JSON.stringify(settingsStore.settings.prompts))
   ElMessage.success('提示词已恢复默认')
 }
 
@@ -490,7 +691,7 @@ onMounted(async () => {
   // 初始化 settingsStore 同步 config.json
   await settingsStore.init()
   // 同步 form 内容
-  Object.assign(form, settingsStore.settings)
+  form.value = JSON.parse(JSON.stringify(settingsStore.settings))
   
   // 加载路径信息
   const dbResult = await window.electronAPI.appGetConfigPath()
@@ -507,7 +708,6 @@ onMounted(async () => {
 <style scoped>
 .settings-page {
   height: 100%;
-  background: var(--bg);
 }
 
 .settings-inner {
@@ -520,7 +720,7 @@ onMounted(async () => {
 
 .settings-tabs :deep(.el-tabs__nav-wrap::after) {
   height: 1px;
-  background-color: var(--border);
+  background-color: var(--border-split);
 }
 
 .settings-tabs :deep(.el-tabs__content) {
@@ -587,6 +787,42 @@ onMounted(async () => {
   padding-top: 8px;
 }
 
+.prompts-split-view {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  min-height: 500px;
+}
+.prompts-tabs {
+  width: 100%;
+}
+.prompts-tabs :deep(.el-tabs__header.is-left) {
+  width: 140px;
+  flex-shrink: 0;
+}
+.prompts-tabs :deep(.el-tabs__content) {
+  flex: 1;
+}
+.prompt-editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.prompt-textarea :deep(.el-textarea__inner) {
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 16px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-split);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+.prompt-textarea :deep(.el-textarea__inner:focus) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-lighter);
+}
+
 /* 模板 */
 .templates {
   display: flex;
@@ -599,10 +835,11 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-split);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
+  background: var(--bg-white);
 }
 .template-item:hover { border-color: var(--primary); background: var(--primary-lighter); }
 

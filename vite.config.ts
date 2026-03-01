@@ -41,6 +41,9 @@ async function getPlugins() {
                   'better-sqlite3',
                   'cheerio',
                   'undici',
+                  'pdf-parse',
+                  'mammoth',
+                  'uuid',
                   ...builtinModules,
                   ...builtinModules.map(m => `node:${m}`)
                 ]

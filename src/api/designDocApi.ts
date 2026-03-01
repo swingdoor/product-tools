@@ -7,7 +7,7 @@ export const designDocApi = {
     saveDoc: (doc: DesignDoc) => invokeApi<DesignDoc>(() => window.electronAPI.designSaveDoc(doc)),
     deleteDoc: (id: string) => invokeApi<boolean>(() => window.electronAPI.designDeleteDoc(id)),
     getLogs: (taskId: string) => invokeApi<TaskLog[]>(() => window.electronAPI.designGetLogs(taskId)),
-    start: (docId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) =>
-        invokeApi<void>(() => window.electronAPI.designStart(docId, apiKey, baseUrl, model, prompts)),
+    start: (docId: string) =>
+        invokeApi<void>(() => window.electronAPI.designStart(docId)),
     cancel: (docId: string) => invokeApi<void>(() => window.electronAPI.designCancel(docId)),
 }

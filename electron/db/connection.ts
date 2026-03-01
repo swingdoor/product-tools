@@ -87,24 +87,55 @@ db.exec(`
     value TEXT -- JSON string
   );
 
+  CREATE TABLE IF NOT EXISTS knowledge_docs (
+    id TEXT PRIMARY KEY,
+    filename TEXT,
+    type TEXT,
+    size INTEGER,
+    path TEXT,
+    tags TEXT DEFAULT '[]',
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS knowledge_vectors (
+    id TEXT PRIMARY KEY,
+    docId TEXT,
+    chunkIndex INTEGER,
+    content TEXT,
+    vector TEXT, -- JSON array of floats
+    createdAt TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_logs_taskId ON task_logs(taskId);
+  CREATE INDEX IF NOT EXISTS idx_vectors_docId ON knowledge_vectors(docId);
 `)
+
+// ── 数据库迁移：为已有表添加新字段 ──
+try {
+  // 检查 knowledge_docs 表是否已有 tags 字段
+  const columns = db.pragma('table_info(knowledge_docs)') as any[]
+  if (columns.length > 0 && !columns.find((c: any) => c.name === 'tags')) {
+    db.exec(`ALTER TABLE knowledge_docs ADD COLUMN tags TEXT DEFAULT '[]'`)
+  }
+} catch (e) {
+  // 表可能不存在，忽略
+}
 
 // ────────────────────────────────────────────────────────────
 // 辅助方法：处理 JSON 转换
 // ────────────────────────────────────────────────────────────
 
 export function toDB(val: any) {
-    return val ? JSON.stringify(val) : null
+  return val ? JSON.stringify(val) : null
 }
 
 export function fromDB<T>(val: any): T | null {
-    if (!val) return null
-    try {
-        return JSON.parse(val) as T
-    } catch (e) {
-        return null
-    }
+  if (!val) return null
+  try {
+    return JSON.parse(val) as T
+  } catch (e) {
+    return null
+  }
 }
 
 export { db, dbPath }

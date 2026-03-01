@@ -3,10 +3,6 @@
 interface AiCallParams {
   type: 'market-insight' | 'product-analysis' | 'prototype-plan' | 'prototype-page'
   payload: Record<string, unknown>
-  apiKey: string
-  baseUrl: string
-  model?: string
-  systemPrompt?: string
 }
 
 interface SaveDialogOptions {
@@ -184,7 +180,7 @@ interface ElectronAPI {
   dbUpdateStatusProgress: (id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) => Promise<DbResult<PrototypeProject>>
 
   // 后台任务执行
-  taskStartGenerate: (projectId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+  taskStartGenerate: (projectId: string) => Promise<{ success: boolean; error?: string }>
   taskCancel: (projectId: string) => Promise<{ success: boolean; error?: string }>
 
   // 需求分析任务
@@ -193,7 +189,7 @@ interface ElectronAPI {
   analysisSaveTask: (task: AnalysisTask) => Promise<DbResult<AnalysisTask>>
   analysisDeleteTask: (id: string) => Promise<DbResult<boolean>>
   analysisGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  analysisStart: (taskId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+  analysisStart: (taskId: string) => Promise<{ success: boolean; error?: string }>
   analysisCancel: (taskId: string) => Promise<{ success: boolean; error?: string }>
 
   // 市场报告任务
@@ -202,7 +198,7 @@ interface ElectronAPI {
   marketSaveReport: (report: MarketReport) => Promise<DbResult<MarketReport>>
   marketDeleteReport: (id: string) => Promise<DbResult<boolean>>
   marketGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  marketStart: (reportId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>, searchConfig?: { enabled: boolean; sources: string[] }) => Promise<{ success: boolean; error?: string }>
+  marketStart: (reportId: string, searchConfig?: { enabled: boolean }) => Promise<{ success: boolean; error?: string }>
   marketCancel: (reportId: string) => Promise<{ success: boolean; error?: string }>
 
   // 设计文档任务
@@ -211,7 +207,7 @@ interface ElectronAPI {
   designSaveDoc: (doc: DesignDoc) => Promise<DbResult<DesignDoc>>
   designDeleteDoc: (id: string) => Promise<DbResult<boolean>>
   designGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
-  designStart: (docId: string, apiKey: string, baseUrl: string, model?: string, prompts?: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+  designStart: (docId: string) => Promise<{ success: boolean; error?: string }>
   designCancel: (docId: string) => Promise<{ success: boolean; error?: string }>
 
   // 数据清除操作
@@ -219,6 +215,17 @@ interface ElectronAPI {
   dataClearAnalysis: () => Promise<{ success: boolean; error?: string }>
   dataClearPrototype: () => Promise<{ success: boolean; error?: string }>
   dataClearDesign: () => Promise<{ success: boolean; error?: string }>
+
+  // 文档管理 (Knowledge Base)
+  knowledgeSelectFile: () => Promise<DbResult<{ sourcePath: string; filename: string; type: string; size: number }>>
+  knowledgeGetList: () => Promise<DbResult<any[]>>
+  knowledgeUpload: (params: { sourcePath: string; filename: string; type: string; size: number; embeddingConfig: { apiKey: string; baseUrl: string; model: string } }) => Promise<DbResult<any>>
+  knowledgeDelete: (docId: string) => Promise<DbResult<void>>
+  knowledgePreview: (docId: string) => Promise<DbResult<{ doc: any; text: string; html: string; ext: string }>>
+  knowledgeSearchSemantic: (params: { query: string; type: 'semantic' | 'keyword'; embeddingConfig?: { apiKey: string; baseUrl: string; model: string } }) => Promise<DbResult<any>>
+  knowledgeUpdateTags: (params: { docId: string; tags: string[] }) => Promise<DbResult<void>>
+  knowledgeGetPdfBase64: (docId: string) => Promise<DbResult<string>>
+  knowledgeOpenPdfWindow: (filePath: string) => Promise<DbResult<void>>
 
   // 应用配置
   appGetConfigPath: () => Promise<DbResult<string>>

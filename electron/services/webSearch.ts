@@ -11,12 +11,9 @@ import { logger } from '../logger'
 // 类型定义
 // ============================================================
 
-export type SearchSourceId = 'bocha_api' | 'bing_cn' | 'baidu' | 'xinhua' | 'xueqiu' | 'c36kr'
-
 /** 联网搜索配置 */
 export interface WebSearchConfig {
     enabled: boolean
-    sources: SearchSourceId[]
     bochaApiKey?: string
     // 用于多轮提问扩展阶段的大模型凭证
     apiKey?: string

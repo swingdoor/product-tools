@@ -137,14 +137,9 @@ export const useDesignDocStore = defineStore('designDoc', () => {
 
   /** 启动生成任务 */
   async function startTask(
-    docId: string,
-    apiKey: string,
-    baseUrl: string,
-    model?: string,
-    prompts?: Record<string, string>
+    docId: string
   ): Promise<{ success: boolean; error?: string }> {
-    const cleanPrompts = prompts ? JSON.parse(JSON.stringify(prompts)) : undefined
-    const result = await designDocApi.start(docId, apiKey, baseUrl, model, cleanPrompts)
+    const result = await designDocApi.start(docId)
     if (result.success) {
       // 刷新文档状态
       await loadDoc(docId)

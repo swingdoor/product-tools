@@ -148,7 +148,7 @@ async function copyModule() {
   cursor: pointer;
   background: #FAFAFA;
   border-bottom: 1px solid var(--border);
-  user-select: none;
+  user-select: text;
 }
 .collapsed .module-header { border-bottom: none; }
 

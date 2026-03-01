@@ -391,7 +391,6 @@ function goToView(id: string) {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
 }
 
 .page-header {
@@ -400,7 +399,7 @@ function goToView(id: string) {
   justify-content: space-between;
   padding: 20px 24px;
   background: var(--bg-white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-split);
 }
 
 .header-left {
