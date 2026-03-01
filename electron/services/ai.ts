@@ -115,6 +115,85 @@ export function getCanvasInfoByClientType(clientType: string): { width: number; 
   return ClientTypes.Web;
 }
 
+/** 通用的 AI 流式请求助手 */
+async function requestStreamAI(
+  params: {
+    baseUrl: string
+    apiKey: string
+    model: string
+    systemPrompt?: string
+    userPrompt: string
+    temperature?: number
+  },
+  taskState: TaskState,
+  onDelta: (delta: string) => void
+): Promise<string> {
+  const response = await fetch(`${params.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${params.apiKey}`
+    },
+    body: JSON.stringify({
+      model: params.model,
+      messages: params.systemPrompt && params.systemPrompt.trim()
+        ? [
+          { role: 'system', content: params.systemPrompt },
+          { role: 'user', content: params.userPrompt }
+        ]
+        : [{ role: 'user', content: params.userPrompt }],
+      stream: true,
+      temperature: params.temperature ?? 0.7
+    })
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`API请求失败: ${response.status} - ${errText}`)
+  }
+
+  const reader = response.body?.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let fullContent = ''
+
+  if (!reader) throw new Error('无法获取响应流')
+
+  try {
+    while (true) {
+      if (taskState.cancelled) {
+        reader.cancel()
+        throw new Error('任务已取消')
+      }
+
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n').filter(line => line.trim())
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          if (data === '[DONE]') continue
+          try {
+            const parsed = JSON.parse(data)
+            const delta = parsed.choices?.[0]?.delta?.content || ''
+            if (delta) {
+              fullContent += delta
+              onDelta(delta)
+            }
+          } catch {
+            // 忽略 JSON 解析错误
+          }
+        }
+      }
+    }
+    return fullContent
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 /** 调用 AI 生成市场报告（带心跳） */
 export async function callMarketAIWithHeartbeat(
   report: any,
@@ -154,64 +233,17 @@ ${dataSourcesText}
   logger.info('MarketInsight', '====================================')
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
+    return await requestStreamAI(
+      {
+        baseUrl,
+        apiKey,
         model: model || 'deepseek-reasoner',
-        messages: systemPrompt && systemPrompt.trim()
-          ? [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ]
-          : [{ role: 'user', content: prompt }],
-        stream: true,
-        temperature: 0.7
-      })
-    })
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`API请求失败: ${response.status} - ${errText}`)
-    }
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let fullContent = ''
-
-    if (!reader) throw new Error('无法获取响应流')
-
-    while (true) {
-      if (taskState.cancelled) {
-        reader.cancel()
-        throw new Error('任务已取消')
-      }
-
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim())
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content || ''
-            if (delta) fullContent += delta
-          } catch {
-            // 忽略 JSON 解析错误
-          }
-        }
-      }
-    }
-
-    return fullContent
+        systemPrompt,
+        userPrompt: prompt
+      },
+      taskState,
+      () => { }
+    )
   } finally {
     clearInterval(heartbeatTimer)
   }
@@ -243,62 +275,17 @@ export async function callAIWithHeartbeat(
   logger.info('AI', '====================================')
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
+    return await requestStreamAI(
+      {
+        baseUrl,
+        apiKey,
         model: model || 'deepseek-reasoner',
-        messages: systemPrompt && systemPrompt.trim()
-          ? [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ]
-          : [{ role: 'user', content: prompt }],
-        stream: true,
-        temperature: 0.7
-      })
-    })
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`API请求失败: ${response.status} - ${errText}`)
-    }
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let fullContent = ''
-
-    if (!reader) throw new Error('无法获取响应流')
-
-    while (true) {
-      if (taskState.cancelled) {
-        reader.cancel()
-        throw new Error('任务已取消')
-      }
-
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim())
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content || ''
-            if (delta) fullContent += delta
-          } catch { }
-        }
-      }
-    }
-
-    return fullContent
+        systemPrompt,
+        userPrompt: prompt
+      },
+      taskState,
+      () => { }
+    )
   } finally {
     clearInterval(heartbeatTimer)
   }
@@ -347,62 +334,17 @@ ${page.htmlContent}
   logger.info('DesignDoc', '====================================')
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
+    return await requestStreamAI(
+      {
+        baseUrl,
+        apiKey,
         model: model || 'deepseek-reasoner',
-        messages: systemPrompt && systemPrompt.trim()
-          ? [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ]
-          : [{ role: 'user', content: prompt }],
-        stream: true,
-        temperature: 0.7
-      })
-    })
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`API请求失败: ${response.status} - ${errText}`)
-    }
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let fullContent = ''
-
-    if (!reader) throw new Error('无法获取响应流')
-
-    while (true) {
-      if (taskState.cancelled) {
-        reader.cancel()
-        throw new Error('任务已取消')
-      }
-
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim())
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content || ''
-            if (delta) fullContent += delta
-          } catch { }
-        }
-      }
-    }
-
-    return fullContent
+        systemPrompt,
+        userPrompt: prompt
+      },
+      taskState,
+      () => { }
+    )
   } finally {
     clearInterval(heartbeatTimer)
   }

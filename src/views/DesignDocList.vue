@@ -292,6 +292,10 @@ import { useSettingsStore } from '@/stores/settings'
 import { knowledgeApi } from '@/api/knowledgeApi'
 
 const router = useRouter()
+import { formatDate } from '@/utils/formatDate'
+import { getStatusType, getStatusText } from '@/utils/taskUtils'
+import { useTaskPolling } from '@/composables/useTaskPolling'
+
 const designDocStore = useDesignDocStore()
 const analysisStore = useProductAnalysisStore()
 const prototypeStore = useProductPrototypeStore()
@@ -320,8 +324,11 @@ const createForm = ref({
 const availableDocs = ref<any[]>([])
 
 // 轮询
-let pollInterval: ReturnType<typeof setInterval> | null = null
-const POLL_MS = 3000
+// 轮询管理
+const { startPolling, stopPolling } = useTaskPolling(
+  () => designDocStore.loadTasks(),
+  () => designDocStore.tasks.some(t => t.status === 'generating')
+)
 
 // 数据过滤
 const filteredTasks = computed(() => {
@@ -346,42 +353,11 @@ const completedProjects = computed(() => {
 })
 
 // 状态样式
-function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
-  const map = {
-    pending: 'info' as const,
-    generating: 'warning' as const,
-    completed: 'success' as const,
-    failed: 'danger' as const
-  }
-  return map[status] || 'info'
-}
 
-// 格式化日期
-function formatDate(dateStr: string) {
-  if (!dateStr) return '-'
-  try {
-    const date = new Date(dateStr)
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const d = String(date.getDate()).padStart(2, '0')
-    const hh = String(date.getHours()).padStart(2, '0')
-    const mm = String(date.getMinutes()).padStart(2, '0')
-    const ss = String(date.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
-  } catch (e) {
-    return dateStr
-  }
-}
 
-function getStatusText(status: TaskStatus): string {
-  const map = {
-    pending: '待提交',
-    generating: '执行中',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return map[status] || '未知'
-}
+
+
+
 
 // 获取引用文档名称列表
 function getRefDocsNames(docIds?: string[]): string {
@@ -465,25 +441,7 @@ function handleRowClick(row: DesignDoc) {
   }
 }
 
-// 轮询逻辑
-function startPolling() {
-  if (pollInterval) return
-  pollInterval = setInterval(async () => {
-    const hasGenerating = designDocStore.tasks.some(t => t.status === 'generating')
-    if (hasGenerating) {
-      await designDocStore.loadTasks()
-    } else {
-      stopPolling()
-    }
-  }, POLL_MS)
-}
 
-function stopPolling() {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
-  }
-}
 
 // 生命周期
 onMounted(async () => {

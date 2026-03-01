@@ -310,6 +310,24 @@ function scrollToHighlight() {
   display: block;
 }
 
+/* 格式提示条 */
+.format-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #fcfcfc;
+  border-bottom: 1px solid var(--border-split);
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.format-hint .el-icon {
+  font-size: 16px;
+  color: var(--text-tertiary);
+}
+
 /* Word HTML 预览 */
 .html-preview {
   padding: 24px;

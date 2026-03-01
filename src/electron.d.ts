@@ -232,6 +232,7 @@ interface ElectronAPI {
   knowledgePreview: (docId: string) => Promise<DbResult<{ doc: any; text: string; html: string; ext: string }>>
   knowledgeSearchSemantic: (params: { query: string; type: 'semantic' | 'keyword'; embeddingConfig?: { apiKey: string; baseUrl: string; model: string } }) => Promise<DbResult<any>>
   knowledgeUpdateTags: (params: { docId: string; tags: string[] }) => Promise<DbResult<void>>
+  knowledgeDeleteGlobalTag: (tag: string) => Promise<DbResult<void>>
   knowledgeGetPdfBase64: (docId: string) => Promise<DbResult<string>>
   knowledgeOpenPdfWindow: (filePath: string) => Promise<DbResult<void>>
 

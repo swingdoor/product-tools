@@ -332,6 +332,9 @@ import { useProductPrototypeStore, type PrototypeProject, type TaskStatus } from
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
 import { useSettingsStore } from '@/stores/settings'
 import { knowledgeApi } from '@/api/knowledgeApi'
+import { formatDate } from '@/utils/formatDate'
+import { getStatusType, getStatusText } from '@/utils/taskUtils'
+import { useTaskPolling } from '@/composables/useTaskPolling'
 import { ClientTypes, type ClientTypeKey } from '@/constants/clientTypes'
 
 const router = useRouter()
@@ -345,26 +348,11 @@ watch(viewMode, (val) => {
   localStorage.setItem('prototypeViewMode', val)
 })
 
-// 轮询定时器
-let pollTimer: ReturnType<typeof setInterval> | null = null
-const POLL_INTERVAL = 3000
-
-// 轮询
-function startPolling() {
-  if (pollTimer) return
-  pollTimer = setInterval(async () => {
-    if (prototypeStore.generatingCount > 0) {
-      await prototypeStore.loadTasks()
-    }
-  }, POLL_INTERVAL)
-}
-
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
+// 轮询管理
+const { startPolling, stopPolling } = useTaskPolling(
+  () => prototypeStore.loadTasks(),
+  () => prototypeStore.tasks.some(t => t.status === 'generating')
+)
 
 // 初始化时从数据库加载项目
 onMounted(async () => {
@@ -405,41 +393,11 @@ const canCreate = computed(() =>
 )
 
 // 状态映射
-function getStatusType(status: TaskStatus): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
-  const map: Record<TaskStatus, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
-    pending: 'info',
-    generating: 'warning',
-    completed: 'success',
-    failed: 'danger'
-  }
-  return map[status]
-}
 
-function formatDate(dateStr: string) {
-  if (!dateStr) return '-'
-  try {
-    const date = new Date(dateStr)
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const d = String(date.getDate()).padStart(2, '0')
-    const hh = String(date.getHours()).padStart(2, '0')
-    const mm = String(date.getMinutes()).padStart(2, '0')
-    const ss = String(date.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
-  } catch (e) {
-    return dateStr
-  }
-}
 
-function getStatusText(status: TaskStatus): string {
-  const map: Record<TaskStatus, string> = {
-    pending: '待提交',
-    generating: '执行中',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return map[status]
-}
+
+
+
 
 function getClientTypeLabel(type: string): string {
   const key = type as ClientTypeKey;
