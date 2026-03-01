@@ -30,6 +30,13 @@
       </nav>
 
       <div class="sidebar-footer">
+        <el-tooltip content="日志" placement="right" :disabled="!isCollapsed">
+          <router-link to="/logs" class="nav-item" :class="{ active: currentPath === '/logs' }">
+            <el-icon size="18"><Document /></el-icon>
+            <span v-if="!isCollapsed">日志</span>
+          </router-link>
+        </el-tooltip>
+        
         <el-tooltip content="设置" placement="right" :disabled="!isCollapsed">
           <router-link to="/settings" class="nav-item" :class="{ active: currentPath === '/settings' }">
             <el-icon size="18"><Setting /></el-icon>
@@ -113,6 +120,7 @@ const currentTitle = computed(() => {
   const item = navItems.find(n => n.path === route.path)
   if (item) return item.label
   if (route.path === '/settings') return '设置'
+  if (route.path === '/logs') return '日志'
   return 'ProductTools'
 })
 

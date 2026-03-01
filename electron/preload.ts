@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbGetLogs: (taskId: string) => ipcRenderer.invoke('db:get-logs', taskId),
   /** 添加日志 */
   dbAddLog: (log: TaskLogInput) => ipcRenderer.invoke('db:add-log', log),
+  /** 获取所有日志 */
+  dbGetAllLogs: () => ipcRenderer.invoke('db:get-all-logs'),
   /** 更新项目进度 */
   dbUpdateProgress: (id: string, progress: GenerateProgressInput) => ipcRenderer.invoke('db:update-progress', { id, progress }),
   /** 更新项目状态和进度 */

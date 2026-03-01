@@ -184,6 +184,7 @@ interface ElectronAPI {
   dbDeleteProject: (id: string) => Promise<DbResult<boolean>>
   dbGetLogs: (taskId: string) => Promise<DbResult<TaskLog[]>>
   dbAddLog: (log: TaskLogInput) => Promise<DbResult<TaskLog>>
+  dbGetAllLogs: () => Promise<DbResult<TaskLog[]>>
   dbUpdateProgress: (id: string, progress: Partial<GenerateProgress>) => Promise<DbResult<PrototypeProject>>
   dbUpdateStatusProgress: (id: string, status: TaskStatus, progress?: Partial<GenerateProgress>, errorMessage?: string) => Promise<DbResult<PrototypeProject>>
 

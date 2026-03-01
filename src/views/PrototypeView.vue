@@ -169,10 +169,36 @@ const currentPage = computed(() => {
 const currentHtmlContent = computed(() => {
   const html = currentPage.value?.htmlContent
   if (!html) return emptyHtml
+
+  const protectionScript = `
+    <script>
+      // 拦截所有链接点击
+      document.addEventListener('click', function(e) {
+        const target = e.target.closest('a');
+        if (target) {
+          e.preventDefault();
+          const href = target.getAttribute('href');
+          console.log('拦截到导航请求:', href);
+          // 可以选择在这里提示用户，或忽略
+        }
+      }, true);
+
+      // 拦截表单提交
+      document.addEventListener('submit', function(e) {
+        e.preventDefault();
+        console.log('拦截到表单提交');
+      }, true);
+    <\/script>
+  `
+
   if (html.trim().startsWith('<!DOCTYPE') || html.trim().startsWith('<html')) {
-    return html
+    // 注入到 </body> 前或末尾
+    if (html.includes('</body>')) {
+      return html.replace('</body>', `${protectionScript}</body>`)
+    }
+    return html + protectionScript
   }
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${html}</body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${html}${protectionScript}</body></html>`
 })
 
 // 监听页面切换，更新提示词

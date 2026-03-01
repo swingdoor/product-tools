@@ -135,6 +135,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
     ipcMain.handle('db:save-project', async (_event, project: any) => ({ success: true, data: projectService.save(project) }))
     ipcMain.handle('db:delete-project', async (_event, id: string) => ({ success: true, data: projectService.delete(id) }))
     ipcMain.handle('db:get-logs', async (_event, taskId: string) => ({ success: true, data: systemRepo.getLogsByTaskId(taskId) }))
+    ipcMain.handle('db:get-all-logs', async () => ({ success: true, data: systemRepo.getLogs() }))
     ipcMain.handle('db:add-log', async (_event, log: any) => ({ success: true, data: systemRepo.addLog(log) }))
     ipcMain.handle('db:update-progress', async (_event, { id, progress }: any) => ({ success: true, data: projectService.updateProgress(id, progress) }))
 
