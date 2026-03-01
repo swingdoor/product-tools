@@ -1,6 +1,6 @@
 {
   "name": "product-tools",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "AI辅助产品工具客户端 - 市场洞察、产品需求分析、产品原型",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -30,12 +30,10 @@
     "markdown-it": "^14.1.0",
     "marked": "^12.0.0",
     "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^4.10.38",
     "pinia": "^2.1.7",
     "uuid": "^13.0.0",
     "vue": "^3.4.0",
     "vue-konva": "^3.3.0",
-    "vue-pdf-embed": "^2.1.3",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {

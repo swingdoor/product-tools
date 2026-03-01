@@ -2,8 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
-// pdf-parse v1 直接导出函数
-const pdfParse = require('pdf-parse')
+// 关键修复：直接引用 lib 下的代码，避开 index.js 中会导致打包后崩溃的测试代码 (ENOENT)
+const pdfParse = require('pdf-parse/lib/pdf-parse.js')
 import mammoth from 'mammoth'
 import { knowledgeRepo, KnowledgeDoc } from '../db/repositories/knowledgeRepo'
 import { getEmbedding } from './ai'

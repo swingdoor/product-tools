@@ -21,16 +21,28 @@
           <el-option label="已完成" value="completed" />
           <el-option label="失败" value="failed" />
         </el-select>
-        <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon>
-          新建任务
-        </el-button>
+        <div class="header-actions">
+          <el-radio-group v-model="viewMode" size="small" class="view-toggle">
+            <el-radio-button label="table">
+              <el-icon><Menu /></el-icon>
+            </el-radio-button>
+            <el-radio-button label="card">
+              <el-icon><Grid /></el-icon>
+            </el-radio-button>
+          </el-radio-group>
+          <el-button type="primary" @click="showCreateDialog = true">
+            <el-icon><Plus /></el-icon>
+            新建任务
+          </el-button>
+        </div>
       </div>
     </header>
 
     <!-- 任务列表表格 -->
     <main class="page-content">
+      <!-- 表格视图 -->
       <el-table
+        v-if="viewMode === 'table'"
         :data="filteredTasks"
         style="width: 100%"
         class="task-table"
@@ -112,6 +124,78 @@
           </el-empty>
         </template>
       </el-table>
+
+      <!-- 卡片视图 -->
+      <div v-else class="task-grid" v-loading="analysisStore.loading">
+        <div v-for="row in filteredTasks" :key="row.id" class="task-card" @click="handleRowClick(row)">
+          <!-- 第一行：名称和操作 -->
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <el-icon v-if="row.status === 'generating'" class="rotating" color="#165DFF"><Loading /></el-icon>
+              <h3 class="card-title" :title="row.title">{{ row.title }}</h3>
+            </div>
+            <div class="card-actions">
+              <el-button
+                v-if="row.status === 'pending'"
+                type="primary"
+                size="small"
+                link
+                @click.stop="handleSubmit(row)"
+              >分析</el-button>
+              <el-button
+                v-if="row.status === 'failed' || row.status === 'completed'"
+                type="primary"
+                size="small"
+                link
+                @click.stop="handleSubmit(row)"
+              >重试</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                type="success"
+                size="small"
+                link
+                @click.stop="goToView(row.id)"
+              >查看</el-button>
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                link
+                @click.stop="handleCancel(row)"
+              >取消</el-button>
+              <el-popconfirm
+                v-if="row.status !== 'generating'"
+                title="确定删除？"
+                @confirm="handleDelete(row.id)"
+              >
+                <template #reference>
+                  <el-button type="danger" size="small" link @click.stop>删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </div>
+
+          <!-- 第二行：关联信息和状态 -->
+          <div class="card-meta">
+            <el-tag v-if="row.sourceReportTitle" size="small" type="primary" plain>
+              关联：{{ row.sourceReportTitle }}
+            </el-tag>
+            <el-tag v-else size="small" type="info" plain>手动输入</el-tag>
+            <el-tag :type="getStatusType(row.status)" size="small" effect="light">
+              {{ getStatusText(row.status) }}
+            </el-tag>
+          </div>
+
+          <!-- 第三行：描述摘要和日期 -->
+          <div class="card-footer">
+            <div class="card-desc" v-if="row.inputContent">
+              {{ row.inputContent.substring(0, 80) }}...
+            </div>
+            <div class="card-date">{{ row.createdAt }}</div>
+          </div>
+        </div>
+        <el-empty v-if="!filteredTasks.length" description="暂无任务" />
+      </div>
     </main>
 
     <!-- 新建任务弹窗 -->
@@ -164,9 +248,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
+import { Plus, Loading, Search, Menu, Grid } from '@element-plus/icons-vue'
 import { useProductAnalysisStore, type AnalysisTask, type TaskStatus } from '@/stores/productAnalysis'
 import { useMarketInsightStore } from '@/stores/marketInsight'
 import { useSettingsStore } from '@/stores/settings'
@@ -175,6 +260,12 @@ const router = useRouter()
 const analysisStore = useProductAnalysisStore()
 const marketStore = useMarketInsightStore()
 const settingsStore = useSettingsStore()
+
+// 视图模式
+const viewMode = ref(localStorage.getItem('analysisViewMode') || 'table')
+watch(viewMode, (val) => {
+  localStorage.setItem('analysisViewMode', val)
+})
 
 // 搜索和筛选
 const searchKeyword = ref('')
@@ -446,6 +537,102 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
+}
+
+/* 卡片视图样式 */
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-split);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.task-card:hover {
+  border-color: #B4D0FF;
+  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.08);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-split);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.view-toggle :deep(.el-radio-button__inner) {
+  padding: 8px 12px;
 }
 
 @keyframes rotating {

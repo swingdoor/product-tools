@@ -42,6 +42,7 @@ async function getPlugins() {
                   'cheerio',
                   'undici',
                   'pdf-parse',
+                  'pdf-parse/lib/pdf-parse.js',
                   'mammoth',
                   'uuid',
                   ...builtinModules,

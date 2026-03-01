@@ -64,14 +64,42 @@
               <component :is="getFileIcon(doc.type)" />
             </el-icon>
           </div>
-          <div class="doc-info">
-            <div class="doc-name" :title="doc.filename">{{ doc.filename }}</div>
-            <div class="doc-meta">
-              <el-tag size="small" effect="plain" :type="getFileTagType(doc.type)">{{ doc.type.toUpperCase() }}</el-tag>
-              <span class="doc-size">{{ formatSize(doc.size) }}</span>
-              <span class="doc-date">{{ formatDate(doc.createdAt) }}</span>
+          <div class="doc-content">
+            <!-- 第一行：名称和操作 -->
+            <div class="card-row">
+              <div class="doc-name" :title="doc.filename">{{ doc.filename }}</div>
+              <div class="doc-actions">
+                <el-tooltip content="添加标签" placement="top">
+                  <el-button size="small" circle @click="openTagDialog(doc)">
+                    <el-icon><CollectionTag /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="预览" placement="top">
+                  <el-button size="small" circle @click="handlePreview(doc)">
+                    <el-icon><View /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="下载" placement="top">
+                  <el-button size="small" circle @click="handleDownload(doc)">
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-button size="small" circle type="danger" plain @click="confirmDelete(doc.id)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
             </div>
-            <!-- 标签行 -->
+
+            <!-- 第二行：类型、大小、时间 -->
+            <div class="card-row meta-row">
+              <div class="meta-left">
+                <el-tag size="small" effect="plain" :type="getFileTagType(doc.type)">{{ doc.type.toUpperCase() }}</el-tag>
+                <span class="doc-size">{{ formatSize(doc.size) }}</span>
+              </div>
+              <div class="doc-date">{{ formatDate(doc.createdAt) }}</div>
+            </div>
+
+            <!-- 第三行：标签（如果有） -->
             <div class="doc-tags" v-if="parseTags(doc.tags).length > 0">
               <el-tag
                 v-for="tag in parseTags(doc.tags)"
@@ -81,26 +109,6 @@
                 @close="removeTag(doc, tag)"
               >{{ tag }}</el-tag>
             </div>
-          </div>
-          <div class="doc-actions">
-            <el-tooltip content="添加标签" placement="top">
-              <el-button size="small" circle @click="openTagDialog(doc)">
-                <el-icon><CollectionTag /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="预览" placement="top">
-              <el-button size="small" circle @click="handlePreview(doc)">
-                <el-icon><View /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="下载" placement="top">
-              <el-button size="small" circle @click="handleDownload(doc)">
-                <el-icon><Download /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-button size="small" circle type="danger" plain @click="confirmDelete(doc.id)">
-              <el-icon><Delete /></el-icon>
-            </el-button>
           </div>
         </div>
       </div>
@@ -558,18 +566,18 @@ onMounted(() => {
 
 .doc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* 关键修复：确保列可以收缩，防止溢出 */
+  gap: 12px;
 }
 
 .doc-card {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 16px 20px;
   background: var(--bg-white);
   border: 1px solid var(--border-split);
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.2s ease;
   cursor: default;
 }
@@ -581,8 +589,8 @@ onMounted(() => {
 
 .doc-icon {
   flex-shrink: 0;
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -591,34 +599,63 @@ onMounted(() => {
   margin-top: 2px;
 }
 
-.doc-info {
+.doc-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .doc-name {
+  flex: 1;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 6px;
 }
 
-.doc-meta {
+.doc-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.meta-row {
+  margin-top: 2px;
+}
+
+.meta-left {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.doc-size {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.doc-date {
   font-size: 12px;
   color: var(--text-tertiary);
 }
 
 .doc-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* 改为不换行 */
   gap: 4px;
   margin-top: 6px;
+  overflow: hidden; /* 配合 ellipsis 如果后续需要 */
 }
 
 .doc-actions {

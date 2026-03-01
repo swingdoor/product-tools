@@ -7,10 +7,20 @@
         <span class="task-count">共 {{ prototypeStore.tasks.length }} 个任务</span>
       </div>
       <div class="header-right">
-        <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon>
-          新建任务
-        </el-button>
+        <div class="header-actions">
+          <el-radio-group v-model="viewMode" size="small" class="view-toggle">
+            <el-radio-button label="table">
+              <el-icon><Menu /></el-icon>
+            </el-radio-button>
+            <el-radio-button label="card">
+              <el-icon><Grid /></el-icon>
+            </el-radio-button>
+          </el-radio-group>
+          <el-button type="primary" @click="showCreateDialog = true">
+            <el-icon><Plus /></el-icon>
+            新建任务
+          </el-button>
+        </div>
       </div>
     </header>
 
@@ -23,16 +33,15 @@
         </el-button>
       </el-empty>
 
+      <!-- 表格视图 -->
       <el-table
-        v-else
+        v-if="viewMode === 'table' && prototypeStore.tasks.length"
         :data="prototypeStore.tasks"
         style="width: 100%"
         row-key="id"
         class="task-table"
         @row-click="handleRowClick"
       >
-
-
         <el-table-column prop="title" label="任务名称" min-width="160">
           <template #default="{ row }">
             <span class="task-name">{{ row.title }}</span>
@@ -128,6 +137,74 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- 卡片视图 -->
+      <div v-else-if="viewMode === 'card' && prototypeStore.tasks.length" class="task-grid">
+        <div v-for="row in prototypeStore.tasks" :key="row.id" class="task-card" @click="handleRowClick(row)">
+          <!-- 第一行：名称和操作 -->
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <el-icon v-if="row.status === 'generating'" class="rotating" color="#165DFF"><Loading /></el-icon>
+              <h3 class="card-title" :title="row.title">{{ row.title }}</h3>
+            </div>
+            <div class="card-actions">
+               <el-button
+                v-if="row.status === 'pending'"
+                type="primary"
+                size="small"
+                link
+                @click.stop="goToGenerate(row.id, 'generate')"
+              >生成</el-button>
+              <el-button
+                v-if="row.status === 'completed' || row.status === 'failed'"
+                type="primary"
+                size="small"
+                link
+                @click.stop="goToGenerate(row.id, 'generate')"
+              >重试</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                type="success"
+                size="small"
+                link
+                @click.stop="goToView(row.id)"
+              >查看</el-button>
+              <el-button
+                v-if="row.status === 'generating'"
+                type="warning"
+                size="small"
+                link
+                @click.stop="handleCancel(row)"
+              >取消</el-button>
+              <el-popconfirm
+                v-if="row.status !== 'generating'"
+                title="确定删除？"
+                @confirm="deleteTask(row)"
+              >
+                <template #reference>
+                  <el-button type="danger" size="small" link @click.stop>删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </div>
+
+          <!-- 第二行：关联信息和状态 -->
+          <div class="card-meta">
+            <el-tag size="small" type="primary" plain>{{ row.clientType }}</el-tag>
+            <el-tag :type="getStatusType(row.status)" size="small" effect="light">
+              {{ getStatusText(row.status) }}
+            </el-tag>
+          </div>
+
+          <!-- 第三行：需求描述和日期 -->
+          <div class="card-footer">
+            <div class="card-desc" v-if="row.analysisContent">
+              {{ row.analysisContent.substring(0, 80) }}...
+            </div>
+            <div class="card-date">{{ row.updatedAt }}</div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- 新建任务弹窗 -->
@@ -192,7 +269,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
-import { Plus, Loading } from '@element-plus/icons-vue'
+import { Plus, Loading, Menu, Grid } from '@element-plus/icons-vue'
 import { useProductPrototypeStore, type PrototypeProject, type TaskStatus } from '@/stores/productPrototype'
 import { useProductAnalysisStore } from '@/stores/productAnalysis'
 import { useSettingsStore } from '@/stores/settings'
@@ -201,6 +278,12 @@ const router = useRouter()
 const prototypeStore = useProductPrototypeStore()
 const analysisStore = useProductAnalysisStore()
 const settingsStore = useSettingsStore()
+
+// 视图模式
+const viewMode = ref(localStorage.getItem('prototypeViewMode') || 'table')
+watch(viewMode, (val) => {
+  localStorage.setItem('prototypeViewMode', val)
+})
 
 // 轮询定时器
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -451,6 +534,111 @@ function goToView(id: string) {
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
+}
+
+/* 卡片视图样式 */
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-split);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.task-card:hover {
+  border-color: #B4D0FF;
+  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.08);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-split);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.view-toggle :deep(.el-radio-button__inner) {
+  padding: 8px 12px;
+}
+
+.rotating {
+  animation: rotating 1s linear infinite;
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .create-form {
